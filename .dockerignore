@@ -1,0 +1,38 @@
+.git/
+.github/
+.gitignore
+.dockerignore
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+
+# Docs / dev artifacts
+docs/
+*.md
+!README.md
+tests/
+.pre-commit-config.yaml
+
+# ML artifacts (mount or pull at runtime)
+datasets/
+mlruns/
+ml/runs/
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
