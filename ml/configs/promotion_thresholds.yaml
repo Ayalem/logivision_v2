@@ -1,0 +1,22 @@
+# Validation-metric gates for MLflow Registry promotions.
+# Read by ml/scripts/promote_model.py. Both blocks are evaluated as
+# "all listed metrics must be >= the listed value".
+#
+# Changing these values is a policy change — record it in a
+# follow-up ADR and bump the version below.
+
+policy_version: 1
+
+# None -> Staging.
+staging_thresholds:
+  val_map50: 0.65
+  val_map50_95: 0.40
+  val_precision: 0.60
+  val_recall: 0.60
+
+# Staging -> Production (still requires `--approve` on the CLI).
+production_thresholds:
+  val_map50: 0.75
+  val_map50_95: 0.50
+  val_precision: 0.70
+  val_recall: 0.70
