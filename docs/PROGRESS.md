@@ -21,10 +21,18 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 - [x] **T1.2.1** Frame extraction (`ml/scripts/extract_frames.py`) — merged to `develop`.
 - [x] **T1.2.2** CVAT stack + YOLO export importer — merged to `develop`. Manual annotation step deferred until real videos exist.
-- [~] **T1.2.3** DVC pipeline on `feature/T1.2.3-dvc-pipeline`.
-  - Files: `dvc.yaml` (repo root, not `ml/` — paths are repo-root-relative anyway), `ml/configs/data.yaml` (params), `ml/tests/test_dvc_pipeline.py`, `Makefile` (`pipeline`, `pipeline-dag`).
-  - Tech: declarative `dvc.yaml` with 2 stages (`extract_frames → prepare_dataset`); `vars:` at top references `ml/configs/data.yaml` for `${...}` substitution in `cmd:`; same file re-listed under each stage's `params:` for proper invalidation tracking; hand-rolled static tests (no real `repro` in CI, too heavy).
-  - Acceptance: 6/6 static tests pass; `dvc dag --full` renders `extract_frames → prepare_dataset`; `dvc repro --dry` succeeds for the first stage (the second fails only because the user has no annotation zip yet — expected).
+- [x] **T1.2.3** DVC pipeline — merged to `develop`.
+
+**Sprint 1.2 — closed ✅** (manual CVAT annotation deferred until raw videos exist; structure ready).
+
+### Sprint 1.3 — Training + MLflow
+
+- [~] **T1.3.1** Training script + config on `feature/T1.3.1-train-script`.
+  - Files: `ml/scripts/train.py`, `ml/configs/yolov8n.yaml`, `ml/tests/test_train.py`, `scripts/gen_synthetic_demo.py`, `Makefile` (`demo-data`, `train`).
+  - Tech: Ultralytics 8.4.x (`YOLO(...).train(...)`), MLflow 2.17 client (params + tags + metrics + artifacts + Registry), `dataset_fingerprint` = sha256 of `data.yaml` + every label file (cheap reproducibility tag). Heavy unit tests are mocked (no real `torch` load), an integration test on a tiny synthetic dataset is gated by `-m integration`.
+  - Acceptance: 7/7 mocked tests pass; `scripts/gen_synthetic_demo.py` → `ml.scripts.import_annotations` round-trip produces a 30-frame YOLO dataset in <2 s; real `make train` deferred to user (full epoch on CPU = ~2-3 min, MLflow logs visible at http://localhost:5050).
+- [ ] T1.3.2 More tests + integration training run.
+- [ ] T1.3.3 Colab/Kaggle training doc.
 
 ### Sprint 1.3 — Training + MLflow
 
