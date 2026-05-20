@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status cvat-up cvat-down cvat-clean
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -65,6 +65,12 @@ dvc-pull: ## Pull DVC-tracked data from the MinIO remote
 dvc-status: ## Show local-vs-cache and cache-vs-remote DVC status
 	$(UV) run dvc status
 	$(UV) run dvc status --cloud
+
+pipeline: ## Reproduce the data pipeline (extract_frames + prepare_dataset)
+	$(UV) run dvc repro
+
+pipeline-dag: ## Render the pipeline DAG to stdout
+	$(UV) run dvc dag --full
 
 cvat-up: ## Start the CVAT annotation stack (UI on :8090)
 	docker compose -f $(COMPOSE_CVAT) up -d
