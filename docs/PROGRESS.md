@@ -50,6 +50,17 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Sprint 1.6 — Serving (BentoML)
 
+- [x] **T1.6** Done. BentoML service serves at :3000 (yolov8n.pt fallback à défaut de Production), load test stdlib, premier rapport sous `docs/mlops/benchmarks/load_*.md`.
+
+### Sprint 1.7 — Drift monitoring
+
+- [x] **T1.7.1** Drift detection — `ml/scripts/drift_monitor.py`. Compare deux snapshots de features (CSV/Parquet, schéma `brightness/contrast/n_detections/avg_confidence`) via Evidently DataDriftPreset (PSI). Fallback `_fallback_psi` en numpy pur si Evidently absent. Produit HTML + JSON sous `docs/mlops/drift/`.
+- [x] **T1.7.2** Metrics — `render_prometheus()` sort un format scrapeable (`logivision_drift_score{feature="..."}` + `logivision_drift_detected`). Exit code 1 si drift détecté → utilisable dans un cron / CI step.
+- [ ] **T1.7.3** Retraining trigger via GitHub Actions (reporté en Phase 5).
+- _Bonus_ — `scripts/fetch_kaggle.py` + `make fetch-kaggle DATASET=...` pour télécharger tout dataset Kaggle annoté (besoin de `KAGGLE_USERNAME` + `KAGGLE_KEY` dans `.env`).
+
+**Original delivery (placeholder)**:
+
 - [~] **T1.6.1 + T1.6.2 + T1.6.3** Bundled in a single delivery on `main`.
   - Files: `services/model_server/{service.py,bentofile.yaml,Dockerfile,tests/test_service.py}`, `tests/load/load_test.py`, `Makefile` (`serve`, `serve-build`, `load-test`).
   - Tech: BentoML 1.3 service that resolves the model at boot via `MlflowClient.search_model_versions` (Production → Staging → local fallback `yolov8n.pt`). Pydantic v2 response schema (`Detection`, `InferenceResponse`). Pure-stdlib load tester (no `k6` install) measuring p50/p95/p99 latency + RPS at concurrency levels 1/5/10.
