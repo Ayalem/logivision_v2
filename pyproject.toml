@@ -20,6 +20,7 @@ dev = [
     "pytest-mock>=3.14.0,<4.0.0",
     "pre-commit>=4.0.0,<5.0.0",
     "detect-secrets>=1.5.0,<2.0.0",
+    "requests>=2.32.0,<3.0.0",
 ]
 
 # ---------- Ruff ----------
@@ -76,8 +77,11 @@ ignore_errors = true
 [tool.pytest.ini_options]
 minversion = "8.3"
 asyncio_mode = "auto"
-addopts = "-ra --strict-markers --strict-config"
+addopts = "-ra --strict-markers --strict-config -m 'not integration'"
 testpaths = ["tests"]
+markers = [
+    "integration: requires the MLOps stack to be running (see scripts/bootstrap.sh)",
+]
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning",
