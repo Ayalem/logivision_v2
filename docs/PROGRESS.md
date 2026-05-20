@@ -31,10 +31,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
   - Files: `ml/scripts/train.py`, `ml/configs/yolov8n.yaml`, `ml/tests/test_train.py`, `scripts/gen_synthetic_demo.py`, `Makefile` (`demo-data`, `train`).
   - Tech: Ultralytics 8.4.x (`YOLO(...).train(...)`), MLflow 2.17 client (params + tags + metrics + artifacts + Registry), `dataset_fingerprint` = sha256 of `data.yaml` + every label file (cheap reproducibility tag). Heavy unit tests are mocked (no real `torch` load), an integration test on a tiny synthetic dataset is gated by `-m integration`.
   - Acceptance: 7/7 mocked tests pass; `scripts/gen_synthetic_demo.py` → `ml.scripts.import_annotations` round-trip produces a 30-frame YOLO dataset in <2 s; real `make train` deferred to user (full epoch on CPU = ~2-3 min, MLflow logs visible at http://localhost:5050).
-- [~] **T1.3.2** Integration training test on `feature/T1.3.2-train-integration`.
-  - Files: `ml/tests/test_train_integration.py` (gen → import → train → MLflow client verify), `ml/scripts/train.py` (added `_sanitize_metric_name` for MLflow's `[A-Za-z0-9_\-./ ]` allow-list), `pyproject.toml` (`boto3` added to `ml` group for MLflow → MinIO artifact upload).
-  - Acceptance: 1 integration test passes in **~15 s** running a real YOLOv8n from-scratch 1-epoch training (imgsz=128, batch=2, 20 synthetic frames). Verifies `status=FINISHED`, params logged, all 6 required tags present, all 4 val metrics present.
-- [ ] T1.3.3 Colab/Kaggle training doc.
+- [x] **T1.3.2** Integration training test — merged to `develop`. 15s end-to-end real run.
+- [~] **T1.3.3** Colab/Kaggle training doc on `feature/T1.3.3-colab-training-doc`.
+  - Files: `docs/mlops/training-on-colab.md` (~150 lines : tunnels, secrets, DVC pull, resume strategy, troubleshooting), `ml/notebooks/colab_train_template.ipynb` (Jupyter notebook ready à ouvrir sur Colab via *File → Open → GitHub*).
+  - Acceptance: notebook JSON is valid (`nbformat 4`) and contains the 6-step flow (setup → GPU check → secrets → DVC pull → train → push). Doc covers Colab + Kaggle + always-on alternatives (Oracle Free, fly.io).
 
 ### Sprint 1.3 — Training + MLflow
 
