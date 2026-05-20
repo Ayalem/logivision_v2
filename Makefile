@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -129,6 +129,22 @@ drift: ## Compute drift between two feature snapshots.  Usage: make drift REF=re
 	@test -n "$(REF)" || { echo "ERROR: pass REF=ref.csv"; exit 1; }
 	@test -n "$(CUR)" || { echo "ERROR: pass CUR=cur.csv"; exit 1; }
 	$(UV) run python -m ml.scripts.drift_monitor --reference $(REF) --current $(CUR)
+
+kafka-up: ## Start Kafka (KRaft) + Schema Registry + Kafka UI.  Topics created automatically.
+	docker compose -f infra/docker-compose/docker-compose.kafka.yml up -d
+	@echo "Kafka :9092 (host) / :9094 (intra-compose)"
+	@echo "Apicurio Schema Registry: http://localhost:8085"
+	@echo "Kafka UI:                 http://localhost:8086"
+
+kafka-down: ## Stop the Kafka stack (volumes preserved).
+	docker compose -f infra/docker-compose/docker-compose.kafka.yml down
+
+kafka-clean: ## Stop AND wipe Kafka volumes (asks confirmation).
+	@read -p "This DELETES all Kafka data. Type 'yes' to continue: " ans && [ "$$ans" = "yes" ]
+	docker compose -f infra/docker-compose/docker-compose.kafka.yml down --volumes --remove-orphans
+
+inference-worker: ## Run the inference worker that consumes raw-frames -> detections.
+	$(UV) run python -m services.inference_worker.worker
 
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }

@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "RawFrame",
+  "namespace": "com.logivision.events.v1",
+  "doc": "Metadata for a captured frame. The pixel bytes live in MinIO, not in the message.",
+  "fields": [
+    {"name": "frame_id", "type": "string", "doc": "UUID"},
+    {"name": "camera_id", "type": "string"},
+    {"name": "timestamp_ms", "type": "long"},
+    {"name": "width", "type": "int"},
+    {"name": "height", "type": "int"},
+    {"name": "frame_uri", "type": "string", "doc": "s3://frames/<camera-id>/<date>/<frame-id>.jpg"}
+  ]
+}
