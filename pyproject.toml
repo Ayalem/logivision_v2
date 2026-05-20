@@ -80,6 +80,8 @@ exclude = [
     "ml/notebooks/",
     "ml/pipelines/",
     "scripts/",
+    "services/",
+    "tests/load/",
     "build/",
     "dist/",
 ]
@@ -93,7 +95,7 @@ ignore_errors = true
 minversion = "8.3"
 asyncio_mode = "auto"
 addopts = "-ra --strict-markers --strict-config -m 'not integration'"
-testpaths = ["tests", "ml/tests"]
+testpaths = ["tests", "ml/tests", "services/model_server/tests"]
 pythonpath = ["."]
 markers = [
     "integration: requires the MLOps stack to be running (see scripts/bootstrap.sh)",

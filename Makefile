@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -110,6 +110,16 @@ compare-archs: ## Train every architecture in ml/configs/comparison.yaml and wri
 
 fetch-videos: ## Fetch warehouse videos from Pexels (requires PEXELS_API_KEY env var)
 	$(UV) run python scripts/fetch_pexels_videos.py --query warehouse --n 10 --output datasets/raw/videos
+
+serve: ## Serve the detector locally via BentoML on :3000
+	cd services/model_server && $(UV) run bentoml serve service:WarehouseDetector --host 0.0.0.0 --port 3000
+
+serve-build: ## Build a Bento (containerizable artifact) for the detector
+	cd services/model_server && $(UV) run bentoml build
+
+load-test: ## Run a quick load test against a running detector.  Usage: make load-test IMAGE=path/to/frame.jpg
+	@test -n "$(IMAGE)" || { echo "ERROR: pass IMAGE=path/to/frame.jpg"; exit 1; }
+	$(UV) run python tests/load/load_test.py --image $(IMAGE) --concurrency 1,5,10 --requests 30
 
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }
