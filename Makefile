@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -88,6 +88,14 @@ demo-data: ## Generate a synthetic CVAT-style YOLO export at datasets/raw/annota
 
 train: ## Train YOLOv8n via ml/scripts/train.py (uses ml/configs/yolov8n.yaml)
 	$(UV) run python -m ml.scripts.train --config ml/configs/yolov8n.yaml
+
+promote: ## Promote MLflow model None -> Staging based on thresholds.  Usage: make promote RUN=<run-id>
+	@test -n "$(RUN)" || { echo "ERROR: pass RUN=<mlflow-run-id>"; exit 1; }
+	$(UV) run python -m ml.scripts.promote_model --run-id $(RUN)
+
+promote-prod: ## Promote MLflow model Staging -> Production (requires explicit approval).  Usage: make promote-prod RUN=<run-id>
+	@test -n "$(RUN)" || { echo "ERROR: pass RUN=<mlflow-run-id>"; exit 1; }
+	$(UV) run python -m ml.scripts.promote_model --run-id $(RUN) --approve
 
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }

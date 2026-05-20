@@ -27,24 +27,18 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Sprint 1.3 — Training + MLflow
 
-- [~] **T1.3.1** Training script + config on `feature/T1.3.1-train-script`.
-  - Files: `ml/scripts/train.py`, `ml/configs/yolov8n.yaml`, `ml/tests/test_train.py`, `scripts/gen_synthetic_demo.py`, `Makefile` (`demo-data`, `train`).
-  - Tech: Ultralytics 8.4.x (`YOLO(...).train(...)`), MLflow 2.17 client (params + tags + metrics + artifacts + Registry), `dataset_fingerprint` = sha256 of `data.yaml` + every label file (cheap reproducibility tag). Heavy unit tests are mocked (no real `torch` load), an integration test on a tiny synthetic dataset is gated by `-m integration`.
-  - Acceptance: 7/7 mocked tests pass; `scripts/gen_synthetic_demo.py` → `ml.scripts.import_annotations` round-trip produces a 30-frame YOLO dataset in <2 s; real `make train` deferred to user (full epoch on CPU = ~2-3 min, MLflow logs visible at http://localhost:5050).
-- [x] **T1.3.2** Integration training test — merged to `develop`. 15s end-to-end real run.
-- [~] **T1.3.3** Colab/Kaggle training doc on `feature/T1.3.3-colab-training-doc`.
-  - Files: `docs/mlops/training-on-colab.md` (~150 lines : tunnels, secrets, DVC pull, resume strategy, troubleshooting), `ml/notebooks/colab_train_template.ipynb` (Jupyter notebook ready à ouvrir sur Colab via *File → Open → GitHub*).
-  - Acceptance: notebook JSON is valid (`nbformat 4`) and contains the 6-step flow (setup → GPU check → secrets → DVC pull → train → push). Doc covers Colab + Kaggle + always-on alternatives (Oracle Free, fly.io).
+- [x] **T1.3.1** Training script + MLflow tracking — merged to `main`. 7/7 mocked tests.
+- [x] **T1.3.2** Integration training test — merged to `main`. 15s end-to-end real run.
+- [x] **T1.3.3** Colab/Kaggle training doc + notebook template — merged to `main`.
 
-### Sprint 1.3 — Training + MLflow
-
-- [ ] T1.3.1 `ml/scripts/train.py` + config.
-- [ ] T1.3.2 Tests.
-- [ ] T1.3.3 Colab training guide.
+**Sprint 1.3 — closed ✅**
 
 ### Sprint 1.4 — Registry + Promotion + OpenVINO
 
-- [ ] T1.4.1 Promotion script + thresholds.
+- [~] **T1.4.1** Promotion script + thresholds on `main`.
+  - Files: `ml/scripts/promote_model.py`, `ml/configs/promotion_thresholds.yaml`, `ml/tests/test_promote_model.py`, `docs/architecture/adr/0003-model-promotion-process.md`, `Makefile` (`promote`, `promote-prod`).
+  - Tech: native `MlflowClient.transition_model_version_stage` — no new dep. Two-gate policy: `None→Staging` automatic on threshold pass; `Staging→Production` requires `--approve`. Previous Production is auto-archived on promotion.
+  - Acceptance: 8 mocked tests cover pass / fail / approve-needed / idempotency / unknown-version cases. ADR 0003 records the policy.
 - [ ] T1.4.2 OpenVINO export (FP32 + INT8 NNCF).
 - [ ] T1.4.3 Benchmark script + report.
 
