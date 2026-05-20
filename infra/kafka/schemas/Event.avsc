@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "Event",
+  "namespace": "com.logivision.events.v1",
+  "doc": "Higher-level event emitted by Flink (stationary box, zone violation, ...).",
+  "fields": [
+    {"name": "event_id", "type": "string"},
+    {"name": "event_type", "type": {"type": "enum", "name": "EventType", "symbols": ["stationary_object", "zone_violation", "tracking_lost", "model_drift"]}},
+    {"name": "severity", "type": {"type": "enum", "name": "Severity", "symbols": ["info", "warning", "critical"]}},
+    {"name": "timestamp_ms", "type": "long"},
+    {"name": "camera_id", "type": ["null", "string"], "default": null},
+    {"name": "track_id", "type": ["null", "string"], "default": null},
+    {"name": "payload", "type": {"type": "map", "values": "string"}, "doc": "free-form key/value pairs for downstream consumers"}
+  ]
+}

@@ -59,9 +59,17 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 - [ ] **T1.7.3** Retraining trigger via GitHub Actions (reporté en Phase 5).
 - _Bonus_ — `scripts/fetch_kaggle.py` + `make fetch-kaggle DATASET=...` pour télécharger tout dataset Kaggle annoté (besoin de `KAGGLE_USERNAME` + `KAGGLE_KEY` dans `.env`).
 
-**Original delivery (placeholder)**:
+---
 
-- [~] **T1.6.1 + T1.6.2 + T1.6.3** Bundled in a single delivery on `main`.
+## Phase 2 — Streaming Kafka + Flink
+
+- [~] **T2.0 Kafka stack** on `main`.
+  - Files: `infra/docker-compose/docker-compose.kafka.yml` (KRaft, no ZooKeeper) + oneshot topic-init container + Apicurio Schema Registry + Kafka UI.
+  - Topics created: `raw-frames` (6 part, 1h retention), `detections` (6 part, 24h), `tracks` (6 part, 24h), `events` (3 part, 7d, compact), `model-drift` (1 part, 30d).
+  - Avro schemas under `infra/kafka/schemas/{RawFrame,Detection,Event}.avsc`.
+- [~] **T2.1 Inference worker** — `services/inference_worker/worker.py`. Consumes `raw-frames`, downloads JPG bytes from MinIO, runs YOLO (model resolved via the same Registry logic as the BentoML service), publishes to `detections`. Idempotent via `frame_id` partition key. JSON wire format for now; Avro/Apicurio upgrade tracked for T2.2.
+- [ ] **T2.2** frame-grabber service (RTSP → MinIO + Kafka).
+- [ ] **T2.3** Flink jobs (CEP: stationary_object, zone_violation; aggregator → ClickHouse).
   - Files: `services/model_server/{service.py,bentofile.yaml,Dockerfile,tests/test_service.py}`, `tests/load/load_test.py`, `Makefile` (`serve`, `serve-build`, `load-test`).
   - Tech: BentoML 1.3 service that resolves the model at boot via `MlflowClient.search_model_versions` (Production → Staging → local fallback `yolov8n.pt`). Pydantic v2 response schema (`Detection`, `InferenceResponse`). Pure-stdlib load tester (no `k6` install) measuring p50/p95/p99 latency + RPS at concurrency levels 1/5/10.
   - Acceptance: 9/9 mocked unit tests on the resolver. The Bento builds (`make serve-build`) and serves locally (`make serve`).
