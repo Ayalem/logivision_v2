@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -111,6 +111,10 @@ compare-archs: ## Train every architecture in ml/configs/comparison.yaml and wri
 fetch-videos: ## Fetch warehouse videos from Pexels (requires PEXELS_API_KEY env var)
 	$(UV) run python scripts/fetch_pexels_videos.py --query warehouse --n 10 --output datasets/raw/videos
 
+fetch-kaggle: ## Fetch a Kaggle dataset (needs KAGGLE_USERNAME + KAGGLE_KEY).  Usage: make fetch-kaggle DATASET=user/name
+	@test -n "$(DATASET)" || { echo "ERROR: pass DATASET=user/name"; exit 1; }
+	$(UV) run python scripts/fetch_kaggle.py --dataset $(DATASET) --output datasets/raw/external
+
 serve: ## Serve the detector locally via BentoML on :3000
 	cd services/model_server && $(UV) run bentoml serve service:WarehouseDetector --host 0.0.0.0 --port 3000
 
@@ -120,6 +124,11 @@ serve-build: ## Build a Bento (containerizable artifact) for the detector
 load-test: ## Run a quick load test against a running detector.  Usage: make load-test IMAGE=path/to/frame.jpg
 	@test -n "$(IMAGE)" || { echo "ERROR: pass IMAGE=path/to/frame.jpg"; exit 1; }
 	$(UV) run python tests/load/load_test.py --image $(IMAGE) --concurrency 1,5,10 --requests 30
+
+drift: ## Compute drift between two feature snapshots.  Usage: make drift REF=ref.csv CUR=cur.csv
+	@test -n "$(REF)" || { echo "ERROR: pass REF=ref.csv"; exit 1; }
+	@test -n "$(CUR)" || { echo "ERROR: pass CUR=cur.csv"; exit 1; }
+	$(UV) run python -m ml.scripts.drift_monitor --reference $(REF) --current $(CUR)
 
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }
