@@ -1,0 +1,46 @@
+# Architectures + shared hyperparams for `ml/scripts/compare_archs.py`.
+# Each entry under `architectures` is a name -> Ultralytics model spec.
+# Use `xxx.yaml` (architecture only, train from scratch) or `xxx.pt`
+# (pretrained on COCO, downloads on first use).
+
+mlflow:
+  tracking_uri: http://localhost:5050
+  experiment: warehouse-arch-comparison
+
+data:
+  yaml_path: datasets/processed/demo/data.yaml
+
+# Same training budget for every architecture — fair comparison.
+shared_hyperparameters:
+  epochs: 20
+  imgsz: 320       # small for CPU-friendly comparison; bump to 640 with a GPU
+  batch: 8
+  patience: 5
+  optimizer: AdamW
+  lr0: 0.001
+  seed: 42
+  # Data augmentation profile — enabled here, off in yolov8n.yaml (which is
+  # the synthetic-demo profile).
+  mosaic: 0.5
+  mixup: 0.1
+  hsv_h: 0.015
+  hsv_s: 0.4
+  hsv_v: 0.3
+  fliplr: 0.5
+  flipud: 0.0
+  degrees: 5.0
+  translate: 0.05
+  scale: 0.2
+
+architectures:
+  yolov8n:
+    weights: yolov8n.yaml
+  yolov11n:
+    weights: yolo11n.yaml      # ultralytics 8.4 ships "yolo11n.yaml"
+  rtdetr_l:
+    weights: rtdetr-l.yaml     # heavier; drop if CPU runs OOM
+
+runtime:
+  device: cpu
+  output_dir: ml/runs/comparison
+  dry_register: true           # keep the registry clean during the sweep
