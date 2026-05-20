@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LOGIVISION — Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .card { @apply bg-slate-800 rounded-lg p-4 shadow-lg; }
+    .row { @apply border-b border-slate-700 hover:bg-slate-700/40; }
+    .stage-Production { @apply bg-emerald-700 text-white; }
+    .stage-Staging    { @apply bg-amber-600 text-white; }
+    .stage-None       { @apply bg-slate-600 text-slate-200; }
+    .stage-Archived   { @apply bg-slate-700 text-slate-400 line-through; }
+    pre { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+  <header class="border-b border-slate-700 p-4">
+    <div class="max-w-6xl mx-auto flex justify-between items-center">
+      <div>
+        <h1 class="text-2xl font-bold">LOGIVISION</h1>
+        <p class="text-sm text-slate-400">Warehouse Computer Vision · Phase 1 + Phase 2 live</p>
+      </div>
+      <div class="text-sm">
+        <span id="api-status" class="px-3 py-1 rounded bg-slate-700">api: ?</span>
+        <span id="ws-status" class="px-3 py-1 rounded bg-slate-700 ml-2">ws: ?</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto p-4 space-y-6">
+
+    <!-- Registry -->
+    <section class="card">
+      <h2 class="text-lg font-semibold mb-3">Model Registry</h2>
+      <table class="w-full text-sm">
+        <thead class="text-slate-400 text-left">
+          <tr><th class="p-2">Model</th><th class="p-2">Version</th><th class="p-2">Stage</th><th class="p-2">Run id</th></tr>
+        </thead>
+        <tbody id="registry-body"></tbody>
+      </table>
+    </section>
+
+    <!-- Recent runs -->
+    <section class="card">
+      <h2 class="text-lg font-semibold mb-3">Recent MLflow runs</h2>
+      <table class="w-full text-sm">
+        <thead class="text-slate-400 text-left">
+          <tr>
+            <th class="p-2">Run id</th><th class="p-2">Experiment</th><th class="p-2">Status</th>
+            <th class="p-2">val_map50</th><th class="p-2">val_map50_95</th>
+          </tr>
+        </thead>
+        <tbody id="runs-body"></tbody>
+      </table>
+    </section>
+
+    <!-- Recent detections -->
+    <section class="card">
+      <h2 class="text-lg font-semibold mb-3">
+        Recent detections (Kafka <code class="text-amber-400">detections</code>)
+        <button id="refresh-detections" class="ml-3 text-xs bg-slate-700 hover:bg-slate-600 px-2 py-1 rounded">refresh</button>
+      </h2>
+      <pre id="detections-body" class="bg-slate-950 p-3 rounded text-xs overflow-x-auto max-h-72"></pre>
+    </section>
+
+    <!-- Live events via WebSocket -->
+    <section class="card">
+      <h2 class="text-lg font-semibold mb-3">Live events (WebSocket on Kafka <code class="text-amber-400">events</code>)</h2>
+      <pre id="events-body" class="bg-slate-950 p-3 rounded text-xs overflow-x-auto max-h-72"></pre>
+    </section>
+
+    <!-- Reports -->
+    <section class="card grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div>
+        <h2 class="text-lg font-semibold mb-3">Drift reports</h2>
+        <ul id="drift-list" class="text-sm space-y-1"></ul>
+      </div>
+      <div>
+        <h2 class="text-lg font-semibold mb-3">Benchmarks</h2>
+        <ul id="benchmark-list" class="text-sm space-y-1"></ul>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const fmt = (v, decimals = 4) => (v == null ? "—" : Number(v).toFixed(decimals));
+    const setStatus = (el, label, ok) => {
+      el.textContent = label;
+      el.className = "px-3 py-1 rounded ml-2 " + (ok ? "bg-emerald-700" : "bg-rose-700");
+    };
+
+    async function loadRegistry() {
+      try {
+        const r = await fetch("/api/registry/models").then((x) => x.json());
+        $("registry-body").innerHTML = (r.models || []).flatMap(m =>
+          m.versions.map(v => `
+            <tr class="row">
+              <td class="p-2">${m.name}</td>
+              <td class="p-2 font-mono">v${v.version}</td>
+              <td class="p-2"><span class="px-2 py-1 rounded text-xs stage-${v.stage}">${v.stage}</span></td>
+              <td class="p-2 font-mono text-xs">${v.run_id.slice(0,8)}</td>
+            </tr>`)
+        ).join("") || `<tr><td colspan="4" class="p-3 text-slate-500">No models registered yet.</td></tr>`;
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadRuns() {
+      try {
+        const r = await fetch("/api/registry/runs?limit=10").then((x) => x.json());
+        $("runs-body").innerHTML = (r.runs || []).map(run => `
+          <tr class="row">
+            <td class="p-2 font-mono text-xs">${run.run_id.slice(0,8)}</td>
+            <td class="p-2">${run.experiment}</td>
+            <td class="p-2">${run.status}</td>
+            <td class="p-2 font-mono">${fmt(run.metrics?.val_map50)}</td>
+            <td class="p-2 font-mono">${fmt(run.metrics?.val_map50_95)}</td>
+          </tr>`).join("") || `<tr><td colspan="5" class="p-3 text-slate-500">No runs found.</td></tr>`;
+      } catch (e) { console.error(e); }
+    }
+
+    async function loadDetections() {
+      try {
+        const r = await fetch("/api/topics/detections/messages?n=5").then((x) => x.json());
+        $("detections-body").textContent = JSON.stringify(r.messages, null, 2);
+      } catch (e) { $("detections-body").textContent = `Error: ${e.message}`; }
+    }
+
+    async function loadReports() {
+      try {
+        const drift = await fetch("/api/drift/reports").then((x) => x.json());
+        $("drift-list").innerHTML = (drift.reports || []).slice(0, 10).map(r =>
+          `<li class="text-slate-300"><span class="font-mono">${r.name}</span> <span class="text-slate-500 text-xs">${(r.size_bytes/1024).toFixed(1)} KB</span></li>`
+        ).join("") || `<li class="text-slate-500">No reports yet — run <code>make drift</code></li>`;
+        const bench = await fetch("/api/benchmarks").then((x) => x.json());
+        $("benchmark-list").innerHTML = (bench.reports || []).slice(0, 10).map(r =>
+          `<li class="text-slate-300"><span class="font-mono">${r.name}</span> <span class="text-slate-500 text-xs">${(r.size_bytes/1024).toFixed(1)} KB</span></li>`
+        ).join("") || `<li class="text-slate-500">No benchmarks yet — run <code>make benchmark</code></li>`;
+      } catch (e) { console.error(e); }
+    }
+
+    async function pingApi() {
+      try {
+        await fetch("/health").then(r => r.json());
+        setStatus($("api-status"), "api: up", true);
+      } catch { setStatus($("api-status"), "api: down", false); }
+    }
+
+    function connectWs() {
+      const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/events`);
+      const body = $("events-body");
+      const events = [];
+      ws.onopen = () => setStatus($("ws-status"), "ws: live", true);
+      ws.onclose = () => { setStatus($("ws-status"), "ws: closed", false); setTimeout(connectWs, 3000); };
+      ws.onerror = () => setStatus($("ws-status"), "ws: error", false);
+      ws.onmessage = (msg) => {
+        const data = JSON.parse(msg.data);
+        if (data.heartbeat) return;
+        events.unshift(data);
+        body.textContent = JSON.stringify(events.slice(0, 20), null, 2);
+      };
+    }
+
+    pingApi();
+    loadRegistry();
+    loadRuns();
+    loadDetections();
+    loadReports();
+    connectWs();
+    $("refresh-detections").onclick = loadDetections;
+    setInterval(() => { pingApi(); loadRuns(); loadRegistry(); }, 10000);
+  </script>
+</body>
+</html>
