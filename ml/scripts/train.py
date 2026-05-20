@@ -68,15 +68,20 @@ def _setup_mlflow(tracking_uri: str, experiment_name: str) -> None:
     mlflow.set_experiment(experiment_name)
 
 
+def _sanitize_metric_name(name: str) -> str:
+    """MLflow only allows [A-Za-z0-9_\\-./ ] — strip parens and map / to ."""
+    return name.replace("/", ".").replace("(", "").replace(")", "")
+
+
 def _flatten_metrics(d: dict[str, Any], prefix: str = "") -> dict[str, float]:
-    """Ultralytics returns nested dicts; flatten to {dotted_key: float}."""
+    """Ultralytics returns nested dicts; flatten + sanitize to {key: float}."""
     out: dict[str, float] = {}
     for k, v in d.items():
         full = f"{prefix}{k}" if not prefix else f"{prefix}.{k}"
         if isinstance(v, dict):
             out.update(_flatten_metrics(v, full))
         elif isinstance(v, int | float):
-            out[full.replace("/", ".")] = float(v)
+            out[_sanitize_metric_name(full)] = float(v)
     return out
 
 
