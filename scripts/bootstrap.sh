@@ -85,7 +85,20 @@ if [[ $mlflow_ok -eq 0 ]]; then
 fi
 log "  logivision-mlops-mlflow: healthy"
 
-# 5. Print URLs.
+# 5. Write DVC local credentials (if DVC is initialised).
+# `.dvc/config.local` is gitignored by DVC, so secrets stay off Git.
+if [[ -d "$ROOT/.dvc" ]]; then
+    MINIO_USER="$(grep -E '^MINIO_ROOT_USER=' "$ENV_FILE" | cut -d= -f2)"
+    MINIO_PASS="$(grep -E '^MINIO_ROOT_PASSWORD=' "$ENV_FILE" | cut -d= -f2)"
+    if [[ -n "$MINIO_USER" && -n "$MINIO_PASS" ]]; then
+        (cd "$ROOT" && \
+            uv run dvc remote modify --local minio access_key_id "$MINIO_USER" --quiet && \
+            uv run dvc remote modify --local minio secret_access_key "$MINIO_PASS" --quiet) \
+            && log "DVC local credentials written to .dvc/config.local."
+    fi
+fi
+
+# 6. Print URLs.
 cat <<EOF
 
 ✅ MLOps stack is up.

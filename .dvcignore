@@ -1,0 +1,29 @@
+# Files / directories DVC must never track or compute hashes for.
+# Syntax: same as .gitignore (gitwildmatch).
+# https://dvc.org/doc/user-guide/dvcignore
+
+# Caches and IDE
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.idea/
+.vscode/
+
+# Test artifacts
+htmlcov/
+coverage.xml
+.coverage
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Notebooks checkpoints
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db

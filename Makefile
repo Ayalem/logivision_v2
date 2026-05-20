@@ -8,7 +8,7 @@ UV ?= uv
 COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -54,6 +54,16 @@ down: ## Stop the local MLOps stack
 clean: ## Stop the stack AND purge named volumes (asks for confirmation)
 	@read -p "This will DELETE all local data volumes. Type 'yes' to continue: " ans && [ "$$ans" = "yes" ]
 	docker compose --env-file .env -f $(COMPOSE_FILE) down --volumes --remove-orphans
+
+dvc-push: ## Push DVC-tracked data to the MinIO remote
+	$(UV) run dvc push
+
+dvc-pull: ## Pull DVC-tracked data from the MinIO remote
+	$(UV) run dvc pull
+
+dvc-status: ## Show local-vs-cache and cache-vs-remote DVC status
+	$(UV) run dvc status
+	$(UV) run dvc status --cloud
 
 train: ## Train the detection model (Sprint 1.3)
 	@test -f ml/scripts/train.py || { echo "ERROR: ml/scripts/train.py not yet created (Sprint 1.3)."; exit 1; }
