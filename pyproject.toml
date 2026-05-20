@@ -98,7 +98,7 @@ ignore_errors = true
 minversion = "8.3"
 asyncio_mode = "auto"
 addopts = "-ra --strict-markers --strict-config -m 'not integration'"
-testpaths = ["tests", "ml/tests", "services/model_server/tests", "services/inference_worker/tests", "services/frame_grabber/tests"]
+testpaths = ["tests", "ml/tests", "services/model_server/tests", "services/inference_worker/tests", "services/frame_grabber/tests", "services/stream_processor/tests"]
 pythonpath = ["."]
 markers = [
     "integration: requires the MLOps stack to be running (see scripts/bootstrap.sh)",
