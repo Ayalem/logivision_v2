@@ -1,0 +1,20 @@
+# Example zones file consumed by services/stream_processor/cep.py
+# Coordinates are normalised (0..1) relative to the image size.
+# Each polygon is a list of vertices, closed automatically by the algorithm.
+
+zones:
+  - name: loading_dock_safe
+    forbidden: false
+    polygon:
+      - {x: 0.0,  y: 0.0}
+      - {x: 0.5,  y: 0.0}
+      - {x: 0.5,  y: 0.5}
+      - {x: 0.0,  y: 0.5}
+
+  - name: forbidden_aisle
+    forbidden: true
+    polygon:
+      - {x: 0.6,  y: 0.2}
+      - {x: 0.95, y: 0.2}
+      - {x: 0.95, y: 0.9}
+      - {x: 0.6,  y: 0.9}
