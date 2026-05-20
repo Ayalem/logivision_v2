@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -83,9 +83,11 @@ cvat-clean: ## Stop CVAT AND wipe its volumes (asks for confirmation)
 	@read -p "This will DELETE all CVAT annotations / users / jobs. Type 'yes' to continue: " ans && [ "$$ans" = "yes" ]
 	docker compose -f $(COMPOSE_CVAT) down --volumes --remove-orphans
 
-train: ## Train the detection model (Sprint 1.3)
-	@test -f ml/scripts/train.py || { echo "ERROR: ml/scripts/train.py not yet created (Sprint 1.3)."; exit 1; }
-	$(UV) run python ml/scripts/train.py --config ml/configs/yolov8n.yaml
+demo-data: ## Generate a synthetic CVAT-style YOLO export at datasets/raw/annotations.zip
+	$(UV) run python scripts/gen_synthetic_demo.py
+
+train: ## Train YOLOv8n via ml/scripts/train.py (uses ml/configs/yolov8n.yaml)
+	$(UV) run python -m ml.scripts.train --config ml/configs/yolov8n.yaml
 
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }
