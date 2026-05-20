@@ -30,6 +30,22 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+def _load_env_file() -> None:
+    """Best-effort .env loader so the script works from `make` subshells."""
+    env_file = Path(__file__).resolve().parent.parent / ".env"
+    if not env_file.is_file():
+        return
+    for raw_line in env_file.read_text().splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), os.path.expandvars(value.strip()))
+
+
+_load_env_file()
+
+
 def _ensure_credentials(username: str | None, key: str | None) -> Path | None:
     """Write a temporary kaggle.json if both are provided. Return its parent dir, or None."""
     if not username or not key:

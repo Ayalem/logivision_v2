@@ -145,7 +145,10 @@ def run(config: WorkerConfig, stop_after: int | None = None) -> int:
         {
             "bootstrap.servers": config.bootstrap_servers,
             "group.id": config.consumer_group,
-            "auto.offset.reset": "latest",
+            # `earliest` so a freshly-started worker replays any frames
+            # already in the topic. Production deployments may flip to
+            # `latest` once a fleet of workers is steady-state.
+            "auto.offset.reset": "earliest",
             "enable.auto.commit": False,
         }
     )
