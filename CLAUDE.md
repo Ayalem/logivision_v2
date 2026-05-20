@@ -1529,6 +1529,30 @@ Pour les drobes de réentraînement quand on a juste quelques nouvelles images :
 - Proposer des améliorations via des PR `chore(plan): ...`.
 - Tenir à jour `docs/PROGRESS.md` avec : tâche, statut, blocages, prochaines étapes.
 
+## Workflow Opérationnel
+
+Avant chaque étape importante :
+1. Expliquer le plan
+2. Montrer les fichiers à modifier
+3. Exécuter les changements
+4. Résumer ce qui a été modifié
+
+## Politique d’Autorisation
+
+Claude peut automatiquement :
+- lire les fichiers
+- modifier les fichiers
+- exécuter du code Python
+- exécuter des commandes uv
+- consulter les logs et l’état des conteneurs Docker
+- lancer les tests
+
+Claude doit demander une autorisation avant :
+- supprimer des fichiers
+- arrêter des conteneurs
+- effectuer un git push
+- modifier l’infrastructure
+
 ---
 
 *Fin du plan d'exécution LOGIVISION v5 — Document destiné à Claude Code — Mise à jour 19 Mai 2026*
