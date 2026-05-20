@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -158,6 +158,9 @@ cep: ## Run the CEP processor (consumes `detections`, emits `events`).  Optional
 	$(UV) run python -m services.stream_processor.cep \
 		$${ZONES:+--zones $$ZONES} \
 		$${STATIONARY_SECONDS:+--stationary-seconds $$STATIONARY_SECONDS}
+
+api: ## Start the FastAPI dashboard backend on :8000 (also serves the frontend).
+	$(UV) run uvicorn services.api.main:app --host 0.0.0.0 --port 8000 --reload
 
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }

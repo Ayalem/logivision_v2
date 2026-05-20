@@ -1758,6 +1758,8 @@ ml = [
     { name = "boto3" },
     { name = "confluent-kafka" },
     { name = "evidently" },
+    { name = "fastapi" },
+    { name = "httpx" },
     { name = "kaggle" },
     { name = "mlflow" },
     { name = "nncf" },
@@ -1768,6 +1770,7 @@ ml = [
     { name = "pyyaml" },
     { name = "torch" },
     { name = "ultralytics" },
+    { name = "uvicorn", extra = ["standard"] },
 ]
 
 [package.metadata]
@@ -1790,6 +1793,8 @@ ml = [
     { name = "boto3", specifier = ">=1.35.0,<2.0.0" },
     { name = "confluent-kafka", specifier = ">=2.5.0,<3" },
     { name = "evidently", specifier = ">=0.4.0,<1" },
+    { name = "fastapi", specifier = ">=0.115,<1" },
+    { name = "httpx", specifier = ">=0.27,<1" },
     { name = "kaggle", specifier = ">=1.6.0,<2" },
     { name = "mlflow", specifier = ">=2.17.0,<3.0.0" },
     { name = "nncf", specifier = ">=2.13.0,<3" },
@@ -1800,6 +1805,7 @@ ml = [
     { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
     { name = "torch", specifier = ">=2.4.0,<3.0.0" },
     { name = "ultralytics", specifier = ">=8.3.0,<9.0.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.30,<1" },
 ]
 
 [[package]]
