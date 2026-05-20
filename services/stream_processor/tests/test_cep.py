@@ -118,12 +118,14 @@ def test_process_one_emits_stationary_after_repeated_centroid() -> None:
         "timestamp_ms": 1000,
         "detections": [_det(100, 100, 130, 130)],
     }
-    # Feed the same detection 4 times.
+    # Feed the same detection 4 times — exactly one event is emitted across
+    # the burst (the others are suppressed by the cooldown).
+    all_events: list[dict] = []
     for t in (1000, 3000, 5000, 9000):
         msg["timestamp_ms"] = t
-        events = process_one(msg, states, zones=[], config=cfg)
-    # The last call should have fired.
-    assert any(e["event_type"] == "stationary_object" for e in events)
+        all_events.extend(process_one(msg, states, zones=[], config=cfg))
+    stationary = [e for e in all_events if e["event_type"] == "stationary_object"]
+    assert len(stationary) == 1
 
 
 def test_process_one_emits_zone_violation_once_per_zone_entry() -> None:
