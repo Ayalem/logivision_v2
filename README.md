@@ -21,11 +21,12 @@ Requires Python 3.11, Docker, and [uv](https://docs.astral.sh/uv/).
 ```bash
 make install              # install Python dev deps
 make pre-commit-install   # install Git hooks
-make lint                 # ruff + mypy
-make test                 # pytest
-make up                   # start MLOps stack (after Sprint 1.1.2)
+make bootstrap            # boot local MLOps stack (PostgreSQL + MinIO + MLflow)
+make test-integration     # 4 smoke tests against the running stack
+make down                 # stop the stack (volumes persist; `make clean` to wipe)
 ```
 
+UIs: MLflow `http://localhost:5050` · MinIO Console `http://localhost:9001`.
 Run `make help` for the full list of targets.
 
 ## Layout

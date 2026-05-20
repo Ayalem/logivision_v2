@@ -8,7 +8,7 @@ UV ?= uv
 COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 
-.PHONY: help install lint format test test-cov up down clean train eval pre-commit-install
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -39,18 +39,21 @@ test: ## Run pytest
 test-cov: ## Run pytest with coverage report
 	$(UV) run pytest --cov --cov-report=term-missing --cov-report=html
 
-up: ## Start the local MLOps stack (Sprint 1.1.2)
-	@test -f $(COMPOSE_FILE) || { echo "ERROR: $(COMPOSE_FILE) not yet created (Sprint 1.1.2)."; exit 1; }
-	docker compose -f $(COMPOSE_FILE) up -d
+test-integration: ## Run integration smoke tests (requires `make bootstrap` first)
+	$(UV) run pytest tests/integration -m integration
+
+bootstrap: ## Boot the MLOps stack and wait for healthchecks (creates .env if missing)
+	./scripts/bootstrap.sh
+
+up: ## Start the local MLOps stack (no wait, no .env auto-create)
+	docker compose --env-file .env -f $(COMPOSE_FILE) up -d --build
 
 down: ## Stop the local MLOps stack
-	@test -f $(COMPOSE_FILE) || { echo "ERROR: $(COMPOSE_FILE) not yet created (Sprint 1.1.2)."; exit 1; }
-	docker compose -f $(COMPOSE_FILE) down
+	docker compose --env-file .env -f $(COMPOSE_FILE) down
 
 clean: ## Stop the stack AND purge named volumes (asks for confirmation)
-	@test -f $(COMPOSE_FILE) || { echo "ERROR: $(COMPOSE_FILE) not yet created (Sprint 1.1.2)."; exit 1; }
 	@read -p "This will DELETE all local data volumes. Type 'yes' to continue: " ans && [ "$$ans" = "yes" ]
-	docker compose -f $(COMPOSE_FILE) down --volumes --remove-orphans
+	docker compose --env-file .env -f $(COMPOSE_FILE) down --volumes --remove-orphans
 
 train: ## Train the detection model (Sprint 1.3)
 	@test -f ml/scripts/train.py || { echo "ERROR: ml/scripts/train.py not yet created (Sprint 1.3)."; exit 1; }
