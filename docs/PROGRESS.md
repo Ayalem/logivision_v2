@@ -10,11 +10,12 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Sprint 1.1 — Bootstrap MLOps Stack
 
-- [x] **T1.1.1** Init repo + outillage — merged to `main`.
-- [~] **T1.1.2** Stack MLOps locale (Postgres + MinIO + MLflow) on `feature/T1.1.2-mlops-stack`.
-  - Files: `infra/docker-compose/docker-compose.mlops.yml`, `infra/docker/{mlflow/Dockerfile,postgres/init.sql}`, `scripts/bootstrap.sh`, `tests/integration/{conftest.py,test_mlops_stack.py}`.
+- [x] **T1.1.1** Init repo + outillage — merged to `develop` (and `main`).
+- [x] **T1.1.2** Stack MLOps locale (Postgres + MinIO + MLflow) — merged to `develop`.
   - Acceptance: `./scripts/bootstrap.sh` = **13 s** (target < 90 s); 4/4 smoke tests green; containers prefixed `logivision-mlops-*` to coexist with the prior v4 stack (stopped, volumes preserved); MLflow port configurable via `MLFLOW_PORT` (default 5050 to avoid macOS ControlCenter on :5000).
-- [ ] **T1.1.3** Setup DVC + MinIO remote + `docs/mlops/dvc-guide.md`.
+- [~] **T1.1.3** Setup DVC + MinIO remote + `docs/mlops/dvc-guide.md` on `feature/T1.1.3-dvc-setup`.
+  - Files: `.dvc/config`, `.dvcignore`, `docs/mlops/dvc-guide.md`, `scripts/bootstrap.sh` (extended), `Makefile` (`dvc-push` / `dvc-pull` / `dvc-status`).
+  - Acceptance: `dvc remote list` shows `minio s3://datasets/dvc-cache`; `dvc status` clean; round-trip `add → push → rm → pull` recovers identical bytes.
 
 ### Sprint 1.2 — Pipeline Données
 
