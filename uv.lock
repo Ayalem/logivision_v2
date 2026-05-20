@@ -912,6 +912,7 @@ dev = [
 ml = [
     { name = "numpy" },
     { name = "opencv-python-headless" },
+    { name = "pyyaml" },
 ]
 
 [package.metadata]
@@ -932,6 +933,7 @@ dev = [
 ml = [
     { name = "numpy", specifier = ">=1.26.0,<3.0.0" },
     { name = "opencv-python-headless", specifier = ">=4.10.0,<5.0.0" },
+    { name = "pyyaml", specifier = ">=6.0.0,<7.0.0" },
 ]
 
 [[package]]

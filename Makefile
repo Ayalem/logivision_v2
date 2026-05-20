@@ -7,8 +7,9 @@ SHELL := /bin/bash
 UV ?= uv
 COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
+COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status cvat-up cvat-down cvat-clean
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -64,6 +65,17 @@ dvc-pull: ## Pull DVC-tracked data from the MinIO remote
 dvc-status: ## Show local-vs-cache and cache-vs-remote DVC status
 	$(UV) run dvc status
 	$(UV) run dvc status --cloud
+
+cvat-up: ## Start the CVAT annotation stack (UI on :8090)
+	docker compose -f $(COMPOSE_CVAT) up -d
+	@echo "CVAT UI starting at http://localhost:8090 (first boot ~60s for migrations)."
+
+cvat-down: ## Stop CVAT (volumes preserved)
+	docker compose -f $(COMPOSE_CVAT) down
+
+cvat-clean: ## Stop CVAT AND wipe its volumes (asks for confirmation)
+	@read -p "This will DELETE all CVAT annotations / users / jobs. Type 'yes' to continue: " ans && [ "$$ans" = "yes" ]
+	docker compose -f $(COMPOSE_CVAT) down --volumes --remove-orphans
 
 train: ## Train the detection model (Sprint 1.3)
 	@test -f ml/scripts/train.py || { echo "ERROR: ml/scripts/train.py not yet created (Sprint 1.3)."; exit 1; }
