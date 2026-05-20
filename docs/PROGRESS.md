@@ -41,6 +41,13 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 **Sprint 1.4 — closed ✅** (a real bench requires a fully-exported run; the user's existing T1.3.2 run only has PyTorch weights — re-run `make export-openvino RUN=<id>` first, then `make benchmark RUN=<id>`).
 
+### Sprint 1.5 — Multi-architecture comparison
+
+- [~] **T1.5.1 (partial)** Multi-arch sweep — `ml/scripts/compare_archs.py` + `ml/configs/comparison.yaml`. Trains YOLOv8n / YOLOv11n / RT-DETR-l on the same dataset with shared hyperparams + augmentation (mosaic, mixup, HSV, flips, rotation), logs each to MLflow with a `comparison_group` tag, writes Markdown + JSON report under `docs/mlops/comparisons/`. 5/5 mocked tests. Run with `make compare-archs`.
+- [ ] **T1.5.2** Optuna hyperparam search (deferred — Ray of diminishing returns on synthetic data).
+- [ ] **T1.5.3** Final comparison report once `make compare-archs` has actually run on the demo dataset (`make demo-data` first).
+- _Bonus_ — **Real-data sourcing** : `scripts/fetch_pexels_videos.py` uses the Pexels free API (CC0 license) to fetch warehouse videos legally; no scraping. `make fetch-videos` (needs `PEXELS_API_KEY` from <https://www.pexels.com/api/>).
+
 ### Sprint 1.5 — Model comparison
 
 - [ ] T1.5.1 Multi-arch training (YOLOv8n, YOLOv11n, RT-DETR, optional YOLOv10n).

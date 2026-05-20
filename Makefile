@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -104,6 +104,12 @@ export-openvino: ## Export run's model to OpenVINO FP32 + INT8 (NNCF), log to ML
 benchmark: ## Benchmark PyTorch/OpenVINO FP32/INT8 variants of a run, write a Markdown report.  Usage: make benchmark RUN=<run-id>
 	@test -n "$(RUN)" || { echo "ERROR: pass RUN=<mlflow-run-id>"; exit 1; }
 	$(UV) run python -m ml.scripts.benchmark_inference --run-id $(RUN)
+
+compare-archs: ## Train every architecture in ml/configs/comparison.yaml and write a Markdown report
+	$(UV) run python -m ml.scripts.compare_archs --config ml/configs/comparison.yaml
+
+fetch-videos: ## Fetch warehouse videos from Pexels (requires PEXELS_API_KEY env var)
+	$(UV) run python scripts/fetch_pexels_videos.py --query warehouse --n 10 --output datasets/raw/videos
 
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }
