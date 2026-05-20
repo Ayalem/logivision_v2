@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -100,6 +100,10 @@ promote-prod: ## Promote MLflow model Staging -> Production (requires explicit a
 export-openvino: ## Export run's model to OpenVINO FP32 + INT8 (NNCF), log to MLflow.  Usage: make export-openvino RUN=<run-id>
 	@test -n "$(RUN)" || { echo "ERROR: pass RUN=<mlflow-run-id>"; exit 1; }
 	$(UV) run python -m ml.scripts.export_openvino --run-id $(RUN)
+
+benchmark: ## Benchmark PyTorch/OpenVINO FP32/INT8 variants of a run, write a Markdown report.  Usage: make benchmark RUN=<run-id>
+	@test -n "$(RUN)" || { echo "ERROR: pass RUN=<mlflow-run-id>"; exit 1; }
+	$(UV) run python -m ml.scripts.benchmark_inference --run-id $(RUN)
 
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }
