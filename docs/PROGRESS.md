@@ -46,7 +46,14 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 - [~] **T1.5.1 (partial)** Multi-arch sweep — `ml/scripts/compare_archs.py` + `ml/configs/comparison.yaml`. Trains YOLOv8n / YOLOv11n / RT-DETR-l on the same dataset with shared hyperparams + augmentation (mosaic, mixup, HSV, flips, rotation), logs each to MLflow with a `comparison_group` tag, writes Markdown + JSON report under `docs/mlops/comparisons/`. 5/5 mocked tests. Run with `make compare-archs`.
 - [ ] **T1.5.2** Optuna hyperparam search (deferred — Ray of diminishing returns on synthetic data).
 - [ ] **T1.5.3** Final comparison report once `make compare-archs` has actually run on the demo dataset (`make demo-data` first).
-- _Bonus_ — **Real-data sourcing** : `scripts/fetch_pexels_videos.py` uses the Pexels free API (CC0 license) to fetch warehouse videos legally; no scraping. `make fetch-videos` (needs `PEXELS_API_KEY` from <https://www.pexels.com/api/>).
+- _Bonus_ — **Real-data sourcing** : `scripts/fetch_pexels_videos.py` uses the Pexels free API (CC0 license) to fetch warehouse videos legally; no scraping. `make fetch-videos` (needs `PEXELS_API_KEY` from <https://www.pexels.com/api/>). Also identified TalTech synthetic warehouse dataset (MIT, 4 records on data.taltech.ee, ~10 GB) and DataDryad 6D-ViCuT (CC0, cuboid tracking) — gated by user's wifi.
+
+### Sprint 1.6 — Serving (BentoML)
+
+- [~] **T1.6.1 + T1.6.2 + T1.6.3** Bundled in a single delivery on `main`.
+  - Files: `services/model_server/{service.py,bentofile.yaml,Dockerfile,tests/test_service.py}`, `tests/load/load_test.py`, `Makefile` (`serve`, `serve-build`, `load-test`).
+  - Tech: BentoML 1.3 service that resolves the model at boot via `MlflowClient.search_model_versions` (Production → Staging → local fallback `yolov8n.pt`). Pydantic v2 response schema (`Detection`, `InferenceResponse`). Pure-stdlib load tester (no `k6` install) measuring p50/p95/p99 latency + RPS at concurrency levels 1/5/10.
+  - Acceptance: 9/9 mocked unit tests on the resolver. The Bento builds (`make serve-build`) and serves locally (`make serve`).
 
 ### Sprint 1.5 — Model comparison
 

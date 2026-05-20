@@ -1,0 +1,33 @@
+# BentoML build manifest. Produces a `warehouse_detector:latest` Bento.
+# Build with:  bentoml build services/model_server/
+# Container:   bentoml containerize warehouse_detector:latest
+
+service: "service:WarehouseDetector"
+
+labels:
+  owner: logivision-team
+  project: logivision
+  sprint: "1.6"
+
+include:
+  - "service.py"
+  - "__init__.py"
+
+python:
+  packages:
+    - "ultralytics>=8.3.0,<9"
+    - "openvino>=2024.4,<2025"
+    - "opencv-python-headless>=4.10,<5"
+    - "numpy>=1.26,<3"
+    - "mlflow>=2.17,<3"
+    - "boto3>=1.35,<2"
+    - "pillow>=10"
+    - "pydantic>=2.9,<3"
+
+docker:
+  python_version: "3.11"
+  distro: debian
+  env:
+    MODEL_STAGE: Production
+    MLFLOW_TRACKING_URI: http://host.docker.internal:5050
+    DETECTION_CONF: "0.25"
