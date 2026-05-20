@@ -13,15 +13,18 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 - [x] **T1.1.1** Init repo + outillage — merged to `develop` (and `main`).
 - [x] **T1.1.2** Stack MLOps locale (Postgres + MinIO + MLflow) — merged to `develop`.
   - Acceptance: `./scripts/bootstrap.sh` = **13 s** (target < 90 s); 4/4 smoke tests green; containers prefixed `logivision-mlops-*` to coexist with the prior v4 stack (stopped, volumes preserved); MLflow port configurable via `MLFLOW_PORT` (default 5050 to avoid macOS ControlCenter on :5000).
-- [~] **T1.1.3** Setup DVC + MinIO remote + `docs/mlops/dvc-guide.md` on `feature/T1.1.3-dvc-setup`.
-  - Files: `.dvc/config`, `.dvcignore`, `docs/mlops/dvc-guide.md`, `scripts/bootstrap.sh` (extended), `Makefile` (`dvc-push` / `dvc-pull` / `dvc-status`).
-  - Acceptance: `dvc remote list` shows `minio s3://datasets/dvc-cache`; `dvc status` clean; round-trip `add → push → rm → pull` recovers identical bytes.
+- [x] **T1.1.3** DVC + MinIO remote — merged to `develop`. `make dvc-{push,pull,status}` + `docs/mlops/dvc-guide.md`.
+
+**Sprint 1.1 — closed ✅**
 
 ### Sprint 1.2 — Pipeline Données
 
-- [ ] T1.2.1 Frame extraction script + tests.
+- [~] **T1.2.1** Frame extraction (`ml/scripts/extract_frames.py`) on `feature/T1.2.1-extract-frames`.
+  - Files: `ml/scripts/extract_frames.py`, `ml/tests/test_extract_frames.py`, `ml/{,scripts/,tests/}__init__.py`, `pyproject.toml` (new `ml` dep group: `opencv-python-headless`, `numpy`).
+  - Tech: OpenCV (cv2) for video read + JPG write; `opencv-python-headless` (no GUI deps) for smaller install & CI/Docker friendliness; manifest is JSONL (line-delimited JSON) for cheap append + streaming consumers.
+  - Acceptance: 7/7 unit tests pass on a synthetic AVI/MJPG video; CLI supports `--fps / --resize / --max-frames-per-video`; manifest contains `{video_id, frame_index, output_path, source_video, timestamp_ms, width, height}` per line.
 - [ ] T1.2.2 CVAT self-hosted + import pipeline + `data.yaml` generator.
-- [ ] T1.2.3 DVC pipeline.
+- [ ] T1.2.3 DVC pipeline (`ml/dvc.yaml` chaining extract + import).
 
 ### Sprint 1.3 — Training + MLflow
 
