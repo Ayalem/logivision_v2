@@ -23,6 +23,10 @@ dev = [
     "requests>=2.32.0,<3.0.0",
     "dvc[s3]>=3.55.0,<4.0.0",
 ]
+ml = [
+    "numpy>=1.26.0,<3.0.0",
+    "opencv-python-headless>=4.10.0,<5.0.0",
+]
 
 # ---------- Ruff ----------
 [tool.ruff]
@@ -71,7 +75,7 @@ exclude = [
 ]
 
 [[tool.mypy.overrides]]
-module = ["ml.scripts.*", "ml.pipelines.*"]
+module = ["ml.scripts.*", "ml.pipelines.*", "ml.tests.*"]
 ignore_errors = true
 
 # ---------- pytest ----------
@@ -79,7 +83,8 @@ ignore_errors = true
 minversion = "8.3"
 asyncio_mode = "auto"
 addopts = "-ra --strict-markers --strict-config -m 'not integration'"
-testpaths = ["tests"]
+testpaths = ["tests", "ml/tests"]
+pythonpath = ["."]
 markers = [
     "integration: requires the MLOps stack to be running (see scripts/bootstrap.sh)",
 ]
