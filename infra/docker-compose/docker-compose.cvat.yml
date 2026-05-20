@@ -1,0 +1,101 @@
+# LOGIVISION — CVAT self-hosted (Sprint 1.2.2).
+# Pinned to v2.14.x (last release before kvrocks / OPA bumps).
+# UI: http://localhost:8090
+# Start with `make cvat-up` (which builds nothing — pure pulls).
+#
+# This is a minimal-but-functional setup. If anything breaks
+# in your environment, fall back to the upstream compose:
+#   git clone --branch v2.14.0 https://github.com/cvat-ai/cvat
+#   cd cvat && CVAT_HOST=localhost docker compose up -d
+
+name: logivision-cvat
+
+x-backend-deps: &backend-deps
+  cvat_db:
+    condition: service_healthy
+  cvat_redis_inmem:
+    condition: service_healthy
+
+services:
+
+  cvat_db:
+    image: postgres:15-alpine
+    container_name: logivision-cvat-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_DB: cvat
+      POSTGRES_HOST_AUTH_METHOD: trust
+    volumes:
+      - cvat-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d cvat"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - logivision-cvat-net
+
+  cvat_redis_inmem:
+    image: redis:7-alpine
+    container_name: logivision-cvat-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", ""]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks:
+      - logivision-cvat-net
+
+  cvat_server:
+    image: cvat/server:v2.14.4
+    container_name: logivision-cvat-server
+    restart: unless-stopped
+    depends_on: *backend-deps
+    environment:
+      CVAT_POSTGRES_HOST: cvat_db
+      CVAT_POSTGRES_USER: root
+      CVAT_POSTGRES_DBNAME: cvat
+      CVAT_REDIS_INMEM_HOST: cvat_redis_inmem
+      CVAT_REDIS_ONDISK_HOST: cvat_redis_inmem
+      DJANGO_LOG_SERVER_HOST: localhost
+      ALLOWED_HOSTS: "*"
+      CVAT_BASE_URL: http://localhost:8090
+      ADAPTIVE_AUTO_ANNOTATION: "false"
+      NUMPROCS: "2"
+    volumes:
+      - cvat-data:/home/django/data
+      - cvat-keys:/home/django/keys
+      - cvat-logs:/home/django/logs
+    networks:
+      - logivision-cvat-net
+
+  cvat_ui:
+    image: cvat/ui:v2.14.4
+    container_name: logivision-cvat-ui
+    restart: unless-stopped
+    depends_on:
+      - cvat_server
+    environment:
+      CVAT_BASE_URL: http://localhost:8090
+    ports:
+      - "8090:80"
+    networks:
+      - logivision-cvat-net
+
+volumes:
+  cvat-db:
+    name: logivision-cvat-db
+  cvat-data:
+    name: logivision-cvat-data
+  cvat-keys:
+    name: logivision-cvat-keys
+  cvat-logs:
+    name: logivision-cvat-logs
+
+networks:
+  logivision-cvat-net:
+    name: logivision-cvat-net
+    driver: bridge

@@ -19,11 +19,14 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Sprint 1.2 — Pipeline Données
 
-- [~] **T1.2.1** Frame extraction (`ml/scripts/extract_frames.py`) on `feature/T1.2.1-extract-frames`.
-  - Files: `ml/scripts/extract_frames.py`, `ml/tests/test_extract_frames.py`, `ml/{,scripts/,tests/}__init__.py`, `pyproject.toml` (new `ml` dep group: `opencv-python-headless`, `numpy`).
-  - Tech: OpenCV (cv2) for video read + JPG write; `opencv-python-headless` (no GUI deps) for smaller install & CI/Docker friendliness; manifest is JSONL (line-delimited JSON) for cheap append + streaming consumers.
-  - Acceptance: 7/7 unit tests pass on a synthetic AVI/MJPG video; CLI supports `--fps / --resize / --max-frames-per-video`; manifest contains `{video_id, frame_index, output_path, source_video, timestamp_ms, width, height}` per line.
-- [ ] T1.2.2 CVAT self-hosted + import pipeline + `data.yaml` generator.
+- [x] **T1.2.1** Frame extraction (`ml/scripts/extract_frames.py`) — merged to `develop`.
+- [~] **T1.2.2** CVAT self-hosted + import script on `feature/T1.2.2-cvat-import`.
+  - Files: `infra/docker-compose/docker-compose.cvat.yml`, `docs/mlops/annotation-guide.md`, `ml/scripts/import_annotations.py`, `ml/tests/test_import_annotations.py`, `Makefile` (`cvat-up/down/clean`).
+  - Tech: CVAT v2.14.4 (pinned before the v2.20 kvrocks bump → only 4 services needed); CVAT UI on `:8090` to avoid generic `:8080` collisions; pure-stdlib `zipfile` + `shutil` for parsing the export, `pyyaml` for `data.yaml` emission.
+  - Acceptance:
+    - 9/9 unit tests pass against a synthesised CVAT YOLO export (`cv2`-generated JPGs + .txt labels packed into a zip).
+    - Compose file syntactically valid (`docker compose config --quiet`).
+    - Manual step (real annotation) deferred until raw videos are available.
 - [ ] T1.2.3 DVC pipeline (`ml/dvc.yaml` chaining extract + import).
 
 ### Sprint 1.3 — Training + MLflow
