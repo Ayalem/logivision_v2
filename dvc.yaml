@@ -1,0 +1,64 @@
+# LOGIVISION — data pipeline (T1.2.3).
+# Run with: `make pipeline` (or `dvc repro`).
+
+# Make `ml/configs/data.yaml` available for ${...} substitution in `cmd:` blocks.
+# (The `params:` blocks below also re-list keys for proper dependency tracking.)
+vars:
+  - ml/configs/data.yaml
+#
+# Stage graph:
+#   datasets/raw/videos ─┐
+#                        ├─► extract_frames ─► datasets/raw/frames
+#                        │                                      │
+#   datasets/raw/annotations.zip ──────────────► prepare_dataset
+#                        ▲                                      │
+#                        └──────────────────────────────────────┘
+#                              ↓
+#                        datasets/processed/current
+#                              + import-report.json (metric)
+#
+# Inputs that DVC tracks (deps + params + outs):
+#   - Code files under ml/scripts/ — change → re-run.
+#   - Param file ml/configs/data.yaml — change a value → re-run only the
+#     stages that consume that param.
+#   - Raw videos / annotation zip — content hash on each file.
+
+stages:
+
+  extract_frames:
+    cmd: >
+      python -m ml.scripts.extract_frames
+      --input datasets/raw/videos
+      --output datasets/raw/frames
+      --fps ${extract_frames.fps}
+      --resize ${extract_frames.resize}
+    deps:
+      - datasets/raw/videos
+      - ml/scripts/extract_frames.py
+    params:
+      - ml/configs/data.yaml:
+          - extract_frames.fps
+          - extract_frames.resize
+          - extract_frames.max_frames_per_video
+    outs:
+      - datasets/raw/frames
+
+  prepare_dataset:
+    cmd: >
+      python -m ml.scripts.import_annotations
+      --input datasets/raw/annotations.zip
+      --output datasets/processed/current
+      --split ${prepare_dataset.split.train} ${prepare_dataset.split.val} ${prepare_dataset.split.test}
+      --seed ${prepare_dataset.seed}
+    deps:
+      - datasets/raw/annotations.zip
+      - datasets/raw/frames
+      - ml/scripts/import_annotations.py
+    params:
+      - ml/configs/data.yaml:
+          - prepare_dataset.split.train
+          - prepare_dataset.split.val
+          - prepare_dataset.split.test
+          - prepare_dataset.seed
+    outs:
+      - datasets/processed/current
