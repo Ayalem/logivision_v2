@@ -20,14 +20,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 ### Sprint 1.2 — Pipeline Données
 
 - [x] **T1.2.1** Frame extraction (`ml/scripts/extract_frames.py`) — merged to `develop`.
-- [~] **T1.2.2** CVAT self-hosted + import script on `feature/T1.2.2-cvat-import`.
-  - Files: `infra/docker-compose/docker-compose.cvat.yml`, `docs/mlops/annotation-guide.md`, `ml/scripts/import_annotations.py`, `ml/tests/test_import_annotations.py`, `Makefile` (`cvat-up/down/clean`).
-  - Tech: CVAT v2.14.4 (pinned before the v2.20 kvrocks bump → only 4 services needed); CVAT UI on `:8090` to avoid generic `:8080` collisions; pure-stdlib `zipfile` + `shutil` for parsing the export, `pyyaml` for `data.yaml` emission.
-  - Acceptance:
-    - 9/9 unit tests pass against a synthesised CVAT YOLO export (`cv2`-generated JPGs + .txt labels packed into a zip).
-    - Compose file syntactically valid (`docker compose config --quiet`).
-    - Manual step (real annotation) deferred until raw videos are available.
-- [ ] T1.2.3 DVC pipeline (`ml/dvc.yaml` chaining extract + import).
+- [x] **T1.2.2** CVAT stack + YOLO export importer — merged to `develop`. Manual annotation step deferred until real videos exist.
+- [~] **T1.2.3** DVC pipeline on `feature/T1.2.3-dvc-pipeline`.
+  - Files: `dvc.yaml` (repo root, not `ml/` — paths are repo-root-relative anyway), `ml/configs/data.yaml` (params), `ml/tests/test_dvc_pipeline.py`, `Makefile` (`pipeline`, `pipeline-dag`).
+  - Tech: declarative `dvc.yaml` with 2 stages (`extract_frames → prepare_dataset`); `vars:` at top references `ml/configs/data.yaml` for `${...}` substitution in `cmd:`; same file re-listed under each stage's `params:` for proper invalidation tracking; hand-rolled static tests (no real `repro` in CI, too heavy).
+  - Acceptance: 6/6 static tests pass; `dvc dag --full` renders `extract_frames → prepare_dataset`; `dvc repro --dry` succeeds for the first stage (the second fails only because the user has no annotation zip yet — expected).
 
 ### Sprint 1.3 — Training + MLflow
 

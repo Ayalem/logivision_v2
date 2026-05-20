@@ -1,0 +1,20 @@
+# Parameters consumed by the DVC pipeline (../dvc.yaml).
+# Changes to any value here invalidate the dependent stages and trigger
+# a re-run on the next `dvc repro`.
+
+extract_frames:
+  # Target frame rate to extract. Source video FPS is detected at runtime;
+  # stride = round(source_fps / fps).
+  fps: 2
+  # Max longest-side dimension after resize (0 disables).
+  resize: 640
+  # Optional cap on frames per video. `null` = no cap.
+  max_frames_per_video: null
+
+prepare_dataset:
+  split:
+    train: 0.70
+    val: 0.15
+    test: 0.15
+  # Deterministic shuffle seed for the train/val/test split.
+  seed: 42
