@@ -2,19 +2,18 @@
 
 The authoritative plan is in [`CLAUDE.md`](CLAUDE.md). This document covers the day-to-day workflow.
 
-## Branching model — simplified Gitflow
+## Branching model — single-branch on `main`
 
-| Branch | Purpose | Protected? |
-|---|---|---|
-| `main` | Production. Tagged releases. | Yes — PR only, CI green. |
-| `develop` | Staging / integration. | Yes — PR only, CI green. |
-| `feature/<short>` | New feature. Branch from `develop`. | No |
-| `fix/<short>` | Bug fix. Branch from `develop`. | No |
-| `chore/<short>` | Tooling, docs, refactor. Branch from `develop`. | No |
-| `hotfix/<short>` | Urgent production fix. Branch from `main`. | No |
-| `release/v*` | Release preparation. Branch from `develop`, merged to `main` + `develop`. | No |
+Single-branch workflow (decision made 2026-05-20 when collapsing the prior gitflow).
 
-Never commit directly to `main` or `develop`. Always open a PR.
+| Branch | Purpose |
+|---|---|
+| `main` | The one and only long-lived branch. All work lands here. |
+| `feature/*` / `fix/*` / `chore/*` | **Short-lived**, optional. Use only when a collaborator opens a PR. Solo contributors commit straight to `main`. |
+
+**For collaborators** (not the repo owner): never push directly to `main`. Open a PR from a short-lived branch, await review, then squash-merge. The owner enforces this with branch protection rules (require PR + 1 approval, disallow force-pushes, disallow deletions).
+
+**For the repo owner**: commit and push straight to `main`. Keep commits Conventional and atomic — every commit on `main` is shippable.
 
 ## Commit messages — Conventional Commits
 
@@ -42,7 +41,7 @@ make format               # auto-fix
 
 All Python code targets Python **3.11**. Service code is `mypy --strict`; ML scripts/notebooks are more permissive (see `pyproject.toml`).
 
-## Pull request checklist
+## Pull request checklist (when a PR is opened)
 
 The template (`.github/pull_request_template.md`) is required. In short:
 - [ ] Tests added / updated, coverage maintained.
@@ -51,6 +50,17 @@ The template (`.github/pull_request_template.md`) is required. In short:
 - [ ] No secret in clear; Trivy scan: `CRITICAL=0`, `HIGH<5`.
 - [ ] Screenshot / GIF if UI-visible change.
 - [ ] `docs/PROGRESS.md` updated.
+
+## Branch protection settings (recommended)
+
+Apply at `https://github.com/Ayalem/logivision_v2/settings/branches` with pattern `main`:
+- Require a pull request before merging  (collaborators only)
+- Require approvals: 1
+- Dismiss stale approvals when new commits are pushed
+- Require linear history
+- **Allow force pushes**: NO
+- **Allow deletions**: NO
+- Do not allow bypassing the above settings: leave OFF for the owner during active development; turn ON once a collaborator joins.
 
 ## CI / CD
 

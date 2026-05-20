@@ -35,12 +35,11 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Sprint 1.4 — Registry + Promotion + OpenVINO
 
-- [~] **T1.4.1** Promotion script + thresholds on `main`.
-  - Files: `ml/scripts/promote_model.py`, `ml/configs/promotion_thresholds.yaml`, `ml/tests/test_promote_model.py`, `docs/architecture/adr/0003-model-promotion-process.md`, `Makefile` (`promote`, `promote-prod`).
-  - Tech: native `MlflowClient.transition_model_version_stage` — no new dep. Two-gate policy: `None→Staging` automatic on threshold pass; `Staging→Production` requires `--approve`. Previous Production is auto-archived on promotion.
-  - Acceptance: 8 mocked tests cover pass / fail / approve-needed / idempotency / unknown-version cases. ADR 0003 records the policy.
-- [ ] T1.4.2 OpenVINO export (FP32 + INT8 NNCF).
-- [ ] T1.4.3 Benchmark script + report.
+- [x] **T1.4.1** Promotion script + ADR 0003 — `ml/scripts/promote_model.py` (9/9 mocked tests).
+- [x] **T1.4.2** OpenVINO FP32 + INT8 (NNCF) export — `ml/scripts/export_openvino.py` (9/9 mocked tests). Adds `openvino` + `nncf` to `ml` deps.
+- [x] **T1.4.3** Inference benchmark + Markdown report — `ml/scripts/benchmark_inference.py` (7/7 mocked tests). Reports under `docs/mlops/benchmarks/`.
+
+**Sprint 1.4 — closed ✅** (a real bench requires a fully-exported run; the user's existing T1.3.2 run only has PyTorch weights — re-run `make export-openvino RUN=<id>` first, then `make benchmark RUN=<id>`).
 
 ### Sprint 1.5 — Model comparison
 
