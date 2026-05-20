@@ -10,10 +10,10 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Sprint 1.1 — Bootstrap MLOps Stack
 
-- [~] **T1.1.1** Init repo + outillage (PR opened on `feature/T1.1.1-init-tooling`)
-  - Files: `pyproject.toml`, `.pre-commit-config.yaml`, `Makefile`, `.gitignore`, `.dockerignore`, `.env.example`, `README.md`, `CONTRIBUTING.md`, `LICENSE`, `NOTICE.md`, `.github/pull_request_template.md`, `docs/PROGRESS.md`.
-  - Acceptance: `make install` < 60 s; `make lint` green on empty tree; `pre-commit run --all-files` green; README < 200 words.
-- [ ] **T1.1.2** Stack MLOps locale (Postgres + MinIO + MLflow) via Docker Compose, `scripts/bootstrap.sh`, smoke test.
+- [x] **T1.1.1** Init repo + outillage — merged to `main`.
+- [~] **T1.1.2** Stack MLOps locale (Postgres + MinIO + MLflow) on `feature/T1.1.2-mlops-stack`.
+  - Files: `infra/docker-compose/docker-compose.mlops.yml`, `infra/docker/{mlflow/Dockerfile,postgres/init.sql}`, `scripts/bootstrap.sh`, `tests/integration/{conftest.py,test_mlops_stack.py}`.
+  - Acceptance: `./scripts/bootstrap.sh` = **13 s** (target < 90 s); 4/4 smoke tests green; containers prefixed `logivision-mlops-*` to coexist with the prior v4 stack (stopped, volumes preserved); MLflow port configurable via `MLFLOW_PORT` (default 5050 to avoid macOS ControlCenter on :5000).
 - [ ] **T1.1.3** Setup DVC + MinIO remote + `docs/mlops/dvc-guide.md`.
 
 ### Sprint 1.2 — Pipeline Données

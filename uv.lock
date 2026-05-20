@@ -155,6 +155,7 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
     { name = "pytest-mock" },
+    { name = "requests" },
     { name = "ruff" },
 ]
 
@@ -169,6 +170,7 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=0.24.0,<0.25.0" },
     { name = "pytest-cov", specifier = ">=5.0.0,<6.0.0" },
     { name = "pytest-mock", specifier = ">=3.14.0,<4.0.0" },
+    { name = "requests", specifier = ">=2.32.0,<3.0.0" },
     { name = "ruff", specifier = ">=0.7.0,<0.8.0" },
 ]
 
