@@ -24,7 +24,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install fastavro confluent-kafka numpy pytest
+          pip install fastavro confluent-kafka numpy pytest-asyncio
 
       - name: Run tests
         run: |
