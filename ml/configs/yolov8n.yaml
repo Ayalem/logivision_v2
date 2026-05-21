@@ -1,30 +1,20 @@
-# LOGIVISION — YOLOv8n training config (Sprint 1.3.1).
-# Consumed by `ml/scripts/train.py`. All values are overridable on the CLI.
-
 mlflow:
   tracking_uri: http://localhost:5050
   experiment: warehouse-detection
   registered_model_name: logivision-detector
-
 model:
   arch: yolov8n
-  # 'yolov8n.pt' = pretrained COCO weights, downloaded on first use.
-  # Use 'yolov8n.yaml' to train from scratch (no network, no pretrained).
   weights: yolov8n.pt
-
 data:
-  # Path to the Ultralytics data.yaml (produced by import_annotations.py).
-  yaml_path: datasets/processed/demo/data.yaml
-
+  yaml_path: data/processed/kaggle_warehouse/data.yaml
 hyperparameters:
-  epochs: 50
-  imgsz: 640
+  epochs: 10
+  imgsz: 320
   batch: 16
-  patience: 20
+  patience: 0
   optimizer: AdamW
   lr0: 0.001
   seed: 42
-  # On CPU + small dataset, full augmentations slow down a lot — keep them light.
   mosaic: 0.0
   mixup: 0.0
   hsv_h: 0.0
@@ -33,11 +23,7 @@ hyperparameters:
   fliplr: 0.5
   flipud: 0.0
   degrees: 0.0
-
 runtime:
-  # 'cpu' for local; pass --device cuda on Colab/Kaggle.
   device: cpu
   output_dir: ml/runs
-  # If true, do NOT register the resulting model in MLflow registry.
-  # Useful for smoke / demo runs that should not pollute the registry.
   dry_register: false
