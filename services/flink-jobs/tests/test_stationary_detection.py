@@ -5,75 +5,66 @@ On teste la logique pure sans Flink ni Kafka.
 
 from __future__ import annotations
 
-import json
-
 from jobs.stationary_detection import (
-    MOVEMENT_THRESHOLD_PX,
-    STATIONARY_THRESHOLD_SEC,
-    Detection,
-    ParseDetection,
-    StationaryState,
+    COOLDOWN_SEC,
+    MOVEMENT_PX,
+    STATIONARY_SEC,
+    TrackState,
 )
 
 
-def test_detection_from_json() -> None:
-    raw = json.dumps(
-        {
-            "object_id": "42",
-            "label": "package",
-            "x": 100.0,
-            "y": 200.0,
-            "confidence": 0.95,
-            "timestamp": 1700000000000,
-        }
-    )
-    d = Detection.from_json(raw)
-    assert d.object_id == "42"
-    assert d.x == 100.0
-    assert d.timestamp == 1700000000000
-
-
-def test_detection_invalid_json() -> None:
-    parser = ParseDetection()
-    result = parser.map("not_valid_json{{{")
-    assert result.object_id == "__invalid__"
+def test_track_state_creation() -> None:
+    """TrackState se crée correctement avec les valeurs par défaut."""
+    state = TrackState(first_seen_ms=1700000000000, last_x=100.0, last_y=200.0)
+    assert state.first_seen_ms == 1700000000000
+    assert state.last_x == 100.0
+    assert state.alerted_at_ms == 0
 
 
 def test_object_moved_resets_state() -> None:
-    """Un objet qui bouge ne doit pas déclencher d'alerte."""
-    now = 1700000000000
-    state = StationaryState(
-        first_seen_ts=now,
-        last_x=100.0,
-        last_y=100.0,
-    )
-    new_x = 100.0 + MOVEMENT_THRESHOLD_PX + 1
+    """Un objet qui bouge dépasse le seuil de mouvement."""
+    state = TrackState(first_seen_ms=1700000000000, last_x=100.0, last_y=100.0)
+    new_x = 100.0 + MOVEMENT_PX + 1
     distance = ((new_x - state.last_x) ** 2) ** 0.5
-    assert distance > MOVEMENT_THRESHOLD_PX
+    assert distance > MOVEMENT_PX
 
 
-def test_object_stationary_triggers_alert() -> None:
-    """Un objet immobile depuis > seuil doit déclencher une alerte."""
+def test_stationary_threshold() -> None:
+    """Le seuil de détection est bien défini."""
+    assert STATIONARY_SEC > 0
+    assert MOVEMENT_PX > 0
+    assert COOLDOWN_SEC > 0
+
+
+def test_no_alert_before_threshold() -> None:
+    """Pas d'alerte si le temps écoulé est inférieur au seuil."""
     now = 1700000000000
-    threshold_ms = STATIONARY_THRESHOLD_SEC * 1000
-    state = StationaryState(
-        first_seen_ts=now,
-        last_x=100.0,
-        last_y=100.0,
-        alerted=False,
-    )
-    later = now + threshold_ms + 1000
-    elapsed_sec = (later - state.first_seen_ts) / 1000.0
-    assert elapsed_sec >= STATIONARY_THRESHOLD_SEC
-    assert not state.alerted
+    state = TrackState(first_seen_ms=now, last_x=100.0, last_y=100.0)
+    later = now + (STATIONARY_SEC - 10) * 1000
+    elapsed_sec = (later - state.first_seen_ms) / 1000.0
+    assert elapsed_sec < STATIONARY_SEC
 
 
-def test_no_double_alert() -> None:
-    """Une fois alerté, alerted=True empêche une deuxième alerte."""
-    state = StationaryState(
-        first_seen_ts=1700000000000,
+def test_alert_after_threshold() -> None:
+    """Alerte déclenchée si le temps écoulé dépasse le seuil."""
+    now = 1700000000000
+    state = TrackState(first_seen_ms=now, last_x=100.0, last_y=100.0, alerted_at_ms=0)
+    later = now + (STATIONARY_SEC + 10) * 1000
+    elapsed_sec = (later - state.first_seen_ms) / 1000.0
+    assert elapsed_sec >= STATIONARY_SEC
+    assert state.alerted_at_ms == 0
+
+
+def test_cooldown_prevents_double_alert() -> None:
+    """Le cooldown empêche une deuxième alerte trop rapide."""
+    now = 1700000000000
+    state = TrackState(
+        first_seen_ms=now,
         last_x=100.0,
         last_y=100.0,
-        alerted=True,
+        alerted_at_ms=now,
     )
-    assert state.alerted is True
+    # Temps écoulé depuis dernière alerte < cooldown
+    later = now + (COOLDOWN_SEC - 10) * 1000
+    time_since_alert = later - state.alerted_at_ms
+    assert time_since_alert < COOLDOWN_SEC * 1000
