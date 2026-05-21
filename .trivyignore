@@ -1,0 +1,7 @@
+# linux-libc-dev kernel CVEs — no fix available upstream, not exploitable in container context
+CVE-2024-35870
+CVE-2024-53179
+CVE-2024-56692
+CVE-2025-37899
+CVE-2025-38118
+CVE-2026-46333

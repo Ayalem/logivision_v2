@@ -59,3 +59,4 @@ jobs:
           image-ref: logivision-flink-jobs:${{ github.sha }}
           severity: "CRITICAL,HIGH"
           exit-code: "1"
+          trivyignores: .trivyignore
