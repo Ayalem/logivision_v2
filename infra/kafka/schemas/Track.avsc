@@ -1,0 +1,14 @@
+{
+  "type": "record",
+  "name": "Track",
+  "namespace": "com.logivision",
+  "fields": [
+    {"name": "object_id",  "type": "string"},
+    {"name": "label",      "type": "string"},
+    {"name": "x",          "type": "float"},
+    {"name": "y",          "type": "float"},
+    {"name": "confidence", "type": "float"},
+    {"name": "timestamp",  "type": "long"},
+    {"name": "zone",       "type": "string"}
+  ]
+}
