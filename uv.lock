@@ -1744,6 +1744,7 @@ source = { virtual = "." }
 dev = [
     { name = "detect-secrets" },
     { name = "dvc", extra = ["s3"] },
+    { name = "kaggle" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
@@ -1779,6 +1780,7 @@ ml = [
 dev = [
     { name = "detect-secrets", specifier = ">=1.5.0,<2.0.0" },
     { name = "dvc", extras = ["s3"], specifier = ">=3.55.0,<4.0.0" },
+    { name = "kaggle", specifier = ">=1.8.4" },
     { name = "mypy", specifier = ">=1.13.0,<1.14.0" },
     { name = "pre-commit", specifier = ">=4.0.0,<5.0.0" },
     { name = "pytest", specifier = ">=8.3.0,<9.0.0" },
