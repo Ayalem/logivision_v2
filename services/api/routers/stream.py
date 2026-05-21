@@ -81,17 +81,36 @@ def _camera_config(camera_id: str) -> dict:
 _CAMERA_NUM_RE = re.compile(r"^CAM0?(\d+)$", re.IGNORECASE)
 
 
-def _video_for_camera(camera_id: str) -> Path | None:
-    """Map camera_id → video file.
+def _source_for_camera(camera_id: str) -> str | int | None:
+    """Resolve the OpenCV-openable source for a camera.
 
-    Convention: `CAM0N` ↔ `CameraN.mp4` when that file exists. This keeps the
-    frame_grabber (`--camera-id CAM03 --source datasets/raw/videos/Camera3.mp4`),
-    the inference worker, and the dashboard tile aligned on the same source.
+    Priority order:
+      1. Explicit `source:` field in cameras.yaml — any URL, file path, or
+         integer device index. `0`/`1`/... become webcam indices (live).
+         `rtsp://...`, `http://...` → live network stream.
+      2. Convention `CAM0N` ↔ `CameraN.mp4` under `data/raw/videos/`
+         (or its legacy `datasets/raw/videos/` location).
+      3. Deterministic hash across all available video files so unmapped
+         cameras still show *some* warehouse scene rather than a black tile.
 
-    Falls back to a deterministic hash across all available videos so cameras
-    without a matching TalTech file (e.g. CAM05 when Camera5.mp4 isn't on disk
-    yet) still show *some* warehouse scene rather than a black tile.
+    Returns either a `Path` (file), a string (RTSP/HTTP URL), or an int
+    (webcam device index). `None` only when *zero* sources are reachable.
     """
+    cfg = _camera_config(camera_id)
+    src = cfg.get("source")
+    if src is not None:
+        if isinstance(src, int) or (isinstance(src, str) and str(src).isdigit()):
+            return int(src)
+        if isinstance(src, str) and (src.startswith(("rtsp://", "http://", "https://"))):
+            return src
+        candidate = Path(src)
+        if not candidate.is_absolute():
+            candidate = (REPO_ROOT / src).resolve()
+        if candidate.is_file():
+            return candidate
+        logger.warning("camera %s: configured source %r unreachable; falling back", camera_id, src)
+
+    # Filename convention fallback
     videos = _list_videos()
     if not videos:
         return None
@@ -105,36 +124,65 @@ def _video_for_camera(camera_id: str) -> Path | None:
     return videos[idx]
 
 
-def _open_source(video_path: Path):
-    """Open the video file with OpenCV; raise if unavailable."""
+# Back-compat alias — older code in this module called the helper
+# `_video_for_camera`. Keep the name working so nothing breaks.
+def _video_for_camera(camera_id: str) -> Path | None:
+    src = _source_for_camera(camera_id)
+    return src if isinstance(src, Path) else None
+
+
+def _open_source(source: Path | str | int):
+    """Open any OpenCV-compatible source — file Path, URL string, or int index.
+
+    - Path  → file (looped on EOF in the generator).
+    - str   → RTSP/HTTP URL (`rtsp://`, `http://`, `https://`).
+    - int   → webcam device index (`0`, `1`, ...). macOS prompts for
+              Camera permission on first attempt.
+    """
     try:
         import cv2  # type: ignore[import-not-found]
     except ImportError as e:  # pragma: no cover
         raise HTTPException(503, "opencv-python-headless not installed") from e
-    cap = cv2.VideoCapture(str(video_path))
+    handle = source if isinstance(source, int | str) else str(source)
+    cap = cv2.VideoCapture(handle)
     if not cap.isOpened():
-        raise HTTPException(500, f"cannot open video {video_path.name}")
+        raise HTTPException(500, f"cannot open source {source!r}")
     return cap, cv2
 
 
 def _mjpeg_generator(camera_id: str):
     """Yield multipart MJPEG chunks for the given camera, looping on EOF."""
-    video = _video_for_camera(camera_id)
-    if video is None:
+    source = _source_for_camera(camera_id)
+    if source is None:
         raise HTTPException(
             404,
-            f"no videos found under {VIDEO_DIR} — drop .mp4 files there to enable live feeds",
+            f"no source resolved for camera={camera_id!r}. Either set "
+            f"`source:` in {CAMERAS_FILE.name} or drop a video into {VIDEO_DIR}",
         )
 
-    cap, cv2 = _open_source(video)
+    cap, cv2 = _open_source(source)
+    # File sources loop on EOF; live sources (webcam, RTSP, HTTP) don't —
+    # they reconnect on transient read failures instead.
+    is_live = not isinstance(source, Path)
     cfg = _camera_config(camera_id)
     target_fps = float(cfg.get("fps_target") or DEFAULT_FPS)
     frame_interval = 1.0 / max(1.0, target_fps)
     encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY]
     boundary = b"--frame"
 
+    src_label = (
+        source.name
+        if isinstance(source, Path)
+        else f"device:{source}"
+        if isinstance(source, int)
+        else source
+    )
     logger.info(
-        "mjpeg stream started camera=%s video=%s fps=%.1f", camera_id, video.name, target_fps
+        "mjpeg stream started camera=%s source=%s fps=%.1f live=%s",
+        camera_id,
+        src_label,
+        target_fps,
+        is_live,
     )
 
     try:
@@ -142,7 +190,12 @@ def _mjpeg_generator(camera_id: str):
         while True:
             ok, frame = cap.read()
             if not ok:
-                # Loop the file so the tile is never blank.
+                if is_live:
+                    # Live source: transient read failure → brief backoff,
+                    # don't try to seek (RTSP/webcam have no rewindable buffer).
+                    time.sleep(0.05)
+                    continue
+                # File source: loop so the tile is never blank.
                 cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 continue
             # Throttle without busy-waiting.

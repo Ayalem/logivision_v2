@@ -57,23 +57,61 @@ class GrabberConfig:
 
 
 def _iter_video_frames(source: str, target_fps: float) -> Any:
-    """Yield (np.ndarray BGR, source_fps) from a video file or RTSP url."""
+    """Yield (np.ndarray BGR) frames from any OpenCV-compatible source.
+
+    Accepts:
+      * a file path  — e.g. `datasets/raw/videos/Camera3.mp4`
+      * an RTSP URL  — e.g. `rtsp://192.168.1.42:8554/stream`
+      * an HTTP URL  — e.g. `http://192.168.1.42:8080/video` (MJPEG)
+      * a USB webcam device index — `"0"`, `"1"`, … (passed via --source)
+        On macOS, the terminal needs Camera permission in System
+        Settings → Privacy & Security → Camera; first attempt prompts.
+
+    For files, throttle to `target_fps` via stride. For *live* sources
+    (cameras, RTSP) we drop intermediate frames using the source clock —
+    `time_since_last_emit < 1/target_fps` skips the frame instead of
+    sleeping, so the buffer never grows.
+    """
     import cv2
 
-    cap = cv2.VideoCapture(source)
+    # Allow numeric device indices: --source 0 → cv2.VideoCapture(0)
+    cv_source: int | str = int(source) if source.isdigit() else source
+    cap = cv2.VideoCapture(cv_source)
     if not cap.isOpened():
-        raise RuntimeError(f"Could not open video source: {source}")
+        raise RuntimeError(
+            f"Could not open video source: {source!r}. "
+            "If this is a USB webcam on macOS, grant Camera permission to "
+            "the terminal in System Settings → Privacy & Security → Camera."
+        )
+
+    is_live = isinstance(cv_source, int) or (
+        isinstance(cv_source, str) and cv_source.startswith(("rtsp://", "http://", "https://"))
+    )
     src_fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
-    stride = max(1, round(src_fps / target_fps)) if target_fps > 0 else 1
+    interval = 1.0 / target_fps if target_fps > 0 else 0.0
+    stride = max(1, round(src_fps / target_fps)) if (target_fps > 0 and not is_live) else 1
+
     idx = 0
+    last_emit = 0.0
     try:
         while True:
             ret, frame = cap.read()
             if not ret:
-                break
-            if idx % stride == 0:
+                # For live sources, transient read failures happen; keep trying.
+                if is_live:
+                    time.sleep(0.05)
+                    continue
+                break  # file EOF
+            if is_live:
+                now = time.monotonic()
+                if interval > 0 and (now - last_emit) < interval:
+                    continue  # rate-limit live capture without buffering
+                last_emit = now
                 yield frame
-            idx += 1
+            else:
+                if idx % stride == 0:
+                    yield frame
+                idx += 1
     finally:
         cap.release()
 
