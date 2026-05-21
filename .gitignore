@@ -114,3 +114,6 @@ volumes/
 *.bak
 .tmp/
 .idea/
+
+# Top-level alias symlink (data → datasets) — not committed.
+/data

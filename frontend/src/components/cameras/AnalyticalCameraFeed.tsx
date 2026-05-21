@@ -62,11 +62,12 @@ function mockTracks(cameraId: string): MockTrack[] {
   }))
 }
 
-function statusDot(status: Camera['status']): { color: string; label: string } {
-  if (status === 'online') return { color: 'bg-emerald animate-pulse-live', label: 'live' }
-  if (status === 'maintenance') return { color: 'bg-amber animate-pulse-live', label: 'maint.' }
-  if (status === 'offline') return { color: 'bg-coral', label: 'offline' }
-  return { color: 'bg-muted-foreground', label: '—' }
+function statusDot(camera: Camera): { color: string; label: string } {
+  if (camera.status === 'maintenance') return { color: 'bg-amber animate-pulse-live', label: 'maint.' }
+  if (camera.status === 'offline')     return { color: 'bg-coral', label: 'offline' }
+  // online: distinguish "pipeline ingesting now" vs "configured but quiet".
+  if (camera.kafkaLive) return { color: 'bg-emerald animate-pulse-live', label: 'live · kafka' }
+  return { color: 'bg-electric animate-pulse-live', label: 'live · feed only' }
 }
 
 // Project a model bbox (pixel coords) onto the 0..100 SVG viewBox space.
@@ -138,7 +139,7 @@ export function AnalyticalCameraFeed({ camera }: { camera: Camera }) {
     return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
   }, [usingRealDetections])
 
-  const stat = statusDot(camera.status)
+  const stat = statusDot(camera)
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden shadow-soft ring-1 ring-border">

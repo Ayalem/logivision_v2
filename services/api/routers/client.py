@@ -294,9 +294,18 @@ def list_zones() -> dict:
 
 @router.get("/cameras")
 def list_cameras() -> dict:
+    """List all configured cameras with status.
+
+    A camera in the YAML registry is `online` by default — the MJPEG stream
+    serves its source video regardless of whether the inference pipeline is
+    busy.  A separate `kafkaLive` sub-indicator marks cameras that have had
+    a `raw-frames` message in the last 30 s, so the operator can see which
+    feeds are actually flowing through Kafka. Flagging the tile 'offline'
+    just because the worker is idle was misleading — the input video is
+    always there.
+    """
     raw = _load_yaml(CAMERAS_FILE)
     cameras_raw = raw.get("cameras", []) or []
-    # Determine which cameras have recently published frames.
     frames, degraded = _peek_topic(KAFKA_RAW_FRAMES_TOPIC, n=50, timeout_s=0.5)
     live_camera_ids: set[str] = set()
     now_ms = int(time.time() * 1000)
@@ -310,17 +319,15 @@ def list_cameras() -> dict:
     for entry in cameras_raw:
         cid = entry["id"]
         is_live = cid in live_camera_ids
-        # Demo-mode: when the streaming pipeline is unavailable, pretend
-        # most cameras are live so the analytical feeds animate. Last
-        # camera stays "maintenance" to show off the status palette.
-        if degraded:
-            status = "maintenance" if cid.endswith("05") else "online"
-            fps = entry.get("fps_target", 5)
-            last_detection = datetime.now(UTC).isoformat()
+        # Allow zones.yaml to mark a camera as offline / under maintenance
+        # explicitly; otherwise we render it online.
+        explicit = entry.get("status")
+        if explicit in {"offline", "maintenance"}:
+            status, fps_value, last_seen = explicit, 0, None
         else:
-            status = "online" if is_live else "offline"
-            fps = entry.get("fps_target", 5) if is_live else 0
-            last_detection = datetime.now(UTC).isoformat() if is_live else None
+            status = "online"
+            fps_value = entry.get("fps_target", 5)
+            last_seen = datetime.now(UTC).isoformat() if is_live else None
         out.append(
             {
                 "id": cid,
@@ -328,10 +335,11 @@ def list_cameras() -> dict:
                 "location": entry.get("location", ""),
                 "zone": entry.get("zone", ""),
                 "status": status,
+                "kafkaLive": is_live,
                 "resolution": entry.get("resolution", "1280x720"),
-                "fps": fps,
+                "fps": fps_value,
                 "detectionCount": _stable_pct(cid + "det", 100, 4000),
-                "lastDetection": last_detection,
+                "lastDetection": last_seen,
             }
         )
     return {"cameras": out, "degraded": degraded}
