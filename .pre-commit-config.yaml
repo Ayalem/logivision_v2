@@ -7,9 +7,9 @@ repos:
     rev: v5.0.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^CLAUDE\.md$  # owned by the user; only edited via dedicated docs(claude) PRs.
+        exclude: ^PROJECT_PLAN\.md$  # owned by the user; only edited via dedicated docs(plan) PRs.
       - id: end-of-file-fixer
-        exclude: ^CLAUDE\.md$
+        exclude: ^PROJECT_PLAN\.md$
       - id: check-merge-conflict
       - id: check-added-large-files
         args: ["--maxkb=1024"]
@@ -19,7 +19,7 @@ repos:
       - id: check-case-conflict
       - id: mixed-line-ending
         args: ["--fix=lf"]
-        exclude: ^CLAUDE\.md$
+        exclude: ^PROJECT_PLAN\.md$
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.7.4

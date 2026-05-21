@@ -1,6 +1,6 @@
 # Contributing to LOGIVISION
 
-The authoritative plan is in [`CLAUDE.md`](CLAUDE.md). This document covers the day-to-day workflow.
+The authoritative plan is in [`PROJECT_PLAN.md`](PROJECT_PLAN.md). This document covers the day-to-day workflow.
 
 ## Branching model — single-branch on `main`
 

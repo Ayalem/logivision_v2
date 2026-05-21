@@ -1,6 +1,6 @@
 # LOGIVISION — État d'avancement
 
-> Statut au 2026-05-20. À destination des co-équipiers. Le récit complet est dans [`JOURNEY.md`](JOURNEY.md), le plan théorique dans [`../CLAUDE.md`](../CLAUDE.md), le suivi tâche par tâche dans [`../docs/PROGRESS.md`](PROGRESS.md).
+> Statut au 2026-05-20. À destination des co-équipiers. Le récit complet est dans [`JOURNEY.md`](JOURNEY.md), le plan théorique dans [`../PROJECT_PLAN.md`](../PROJECT_PLAN.md), le suivi tâche par tâche dans [`../docs/PROGRESS.md`](PROGRESS.md).
 
 ## TL;DR
 
@@ -79,7 +79,6 @@ Tout ce qui ressemble à une commande dans ce projet est dans le `Makefile` — 
 
 - **Une seule branche : `main`** (le gitflow `develop` + `feature/*` a été collapsé pour la lisibilité, cf. `CONTRIBUTING.md`).
 - Co-équipiers ouvrent une **PR depuis une branche courte**, owner peut commit direct.
-- **Aucun trailer `Co-Authored-By: Claude`** dans l'historique (projet académique). Toute génération automatique doit être anonymisée avant commit.
 
 Branch protection à activer sur `main` côté GitHub (cf. CONTRIBUTING.md §"Branch protection settings").
 
@@ -142,5 +141,5 @@ Carte détaillée des emplacements : `docs/JOURNEY.md` section 4.
 
 1. **Sprint 1.7** (drift monitoring) — Evidently job périodique qui compare la distribution des inputs sur 24 h vs un snapshot de référence DVC. Alerte si PSI / Jensen-Shannon > seuil.
 2. **Vraies annotations** — quand wifi tranquille : télécharger TalTech Models + DataDryad → adapter `ml/configs/yolov8n.yaml` → `make train` real → `make promote --approve` → BentoML cesse de fallback.
-3. **Frontend** — pas planifié dans CLAUDE.md, à patcher en PR `docs(claude): add frontend sprints` (cf. PROGRESS.md "Frontend track").
+3. **Frontend** — pas planifié dans PROJECT_PLAN.md, à patcher en PR `docs(plan): add frontend sprints` (cf. PROGRESS.md "Frontend track").
 4. **Phase 2** (streaming Kafka + Flink) — bloqué tant que Phase 1 n'est pas 100% close.

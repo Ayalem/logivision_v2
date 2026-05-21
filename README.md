@@ -2,7 +2,7 @@
 
 Production-grade intelligent warehouse surveillance built on Computer Vision (YOLO + ByteTrack) and a fully open-source MLOps stack (MLflow, DVC, Kafka, Flink, Feast, BentoML, K3s).
 
-The full execution plan — phases, sprints, acceptance criteria, technology choices — lives in [`CLAUDE.md`](CLAUDE.md). Read it before contributing.
+The full execution plan — phases, sprints, acceptance criteria, technology choices — lives in [`PROJECT_PLAN.md`](PROJECT_PLAN.md). Read it before contributing.
 
 ## Current status
 
@@ -31,7 +31,7 @@ Run `make help` for the full list of targets.
 
 ## Layout
 
-See the monorepo structure in [`CLAUDE.md` §4](CLAUDE.md). Directories appear as their corresponding sprint lands; the repo is intentionally minimal until then.
+See the monorepo structure in [`PROJECT_PLAN.md` §4](PROJECT_PLAN.md). Directories appear as their corresponding sprint lands; the repo is intentionally minimal until then.
 
 ## License
 

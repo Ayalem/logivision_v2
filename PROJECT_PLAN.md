@@ -1,6 +1,4 @@
-# LOGIVISION — Plan d'Exécution Production-Grade pour Claude Code
-
-> **Pour Claude Code** : ce document est ton plan de travail intégral. Lis-le en entier avant toute action. Chaque phase a un objectif, des fichiers à produire, des commandes à exécuter, et des critères d'acceptation. Tu travailles de manière autonome, tu commit/PR à chaque tâche terminée, tu écris des tests, tu mets à jour la doc. Si une instruction est ambiguë, tu privilégies la solution la plus simple qui satisfait les critères d'acceptation — pas de surengineering.
+# LOGIVISION — Plan d'Exécution Production-Grade
 
 ---
 
@@ -144,7 +142,7 @@ Choix : **Kappa**. Un seul pipeline streaming (Kafka + Flink). Le rejeu historiq
 
 ## 3. Stack Technique (versions épinglées)
 
-> Claude Code : utilise ces versions exactes dans les `requirements.txt`, `package.json`, `Dockerfile`, etc. Si une version a une faille connue, tu fais une PR séparée pour la bump après avoir vérifié la compatibilité.
+> développeur : utilise ces versions exactes dans les `requirements.txt`, `package.json`, `Dockerfile`, etc. Si une version a une faille connue, tu fais une PR séparée pour la bump après avoir vérifié la compatibilité.
 
 ### 3.1 Computer Vision & ML
 
@@ -394,7 +392,7 @@ logivision/
 ├── Makefile                       # commandes raccourcis
 ├── README.md
 ├── CONTRIBUTING.md
-├── CLAUDE.md                      # CE FICHIER
+├── PROJECT_PLAN.md                      # CE FICHIER
 ├── LICENSE
 └── pyproject.toml                 # workspace racine (uv/rye)
 ```
@@ -403,7 +401,7 @@ logivision/
 
 ## 5. PHASE 1 — MLOps Computer Vision (PRIORITÉ ABSOLUE)
 
-> **Durée estimée** : 3 à 4 semaines de boulot Claude Code à plein temps.
+> **Durée estimée** : 3 à 4 semaines de boulot développeur à plein temps.
 > **Objectif** : à la fin de cette phase, on peut entraîner YOLO sur Colab, logguer tout dans MLflow, promouvoir un modèle dans le Registry, le servir via BentoML, mesurer la dérive en production. **Sans aucune dépendance à Kafka/Flink/Feast** — ceux-là viennent en Phase 2-3.
 
 ### 5.1 Vue d'ensemble Phase 1
@@ -532,7 +530,7 @@ Procédure documentée dans `docs/mlops/annotation-guide.md` :
 1. Créer une organisation CVAT.
 2. Importer les frames.
 3. Définir les labels : `box`, `person`, `forklift`, `qr_code`, `barcode`, `pallet` (configurable).
-4. Annoter (équipe humaine — pas Claude Code).
+4. Annoter (équipe humaine — pas développeur).
 5. Exporter au format YOLO (zip).
 
 Script `ml/scripts/import_annotations.py` :
@@ -1493,66 +1491,3 @@ Pour les drobes de réentraînement quand on a juste quelques nouvelles images :
 
 ---
 
-## 14. Instructions Finales pour Claude Code
-
-**Avant chaque session de travail** :
-1. `git pull origin develop`
-2. Lis ce document en entier (oui, à chaque session).
-3. Identifie la phase et le sprint en cours dans `docs/PROGRESS.md` (fichier à créer en début de projet, tu le mets à jour à chaque tâche).
-4. Liste les tâches restantes du sprint.
-
-**Pour chaque tâche** :
-1. Crée une branche `feature/T<id>-<short>` depuis `develop`.
-2. Implémente.
-3. Tests d'abord (TDD quand applicable, sinon tests en parallèle).
-4. Documente.
-5. Commit avec Conventional Commits, messages clairs.
-6. Push, ouvre la PR avec template rempli.
-7. CI doit passer. Si tu es seul, auto-merge après check.
-8. Met à jour `docs/PROGRESS.md`.
-
-**Quand tu hésites** :
-- Choix simple vs élégant → **simple gagne**.
-- Bibliothèque connue vs trendy → **connue gagne**.
-- Réinventer vs réutiliser → **réutilise**.
-- Trop de configuration vs valeurs par défaut → **defaults gagnent**, on configure quand un besoin réel émerge.
-
-**Tu n'as pas le droit de** :
-- Ajouter une dépendance payante.
-- Hardcoder un secret.
-- Skip un test parce que "c'est compliqué".
-- Faire un commit sur `main` ou `develop` direct (toujours via PR).
-- Modifier ce fichier `CLAUDE.md` sans une PR dédiée `docs(claude): update plan`.
-
-**Tu as le droit / le devoir de** :
-- Refuser une demande qui contredit ce document, et demander une mise à jour du plan d'abord.
-- Proposer des améliorations via des PR `chore(plan): ...`.
-- Tenir à jour `docs/PROGRESS.md` avec : tâche, statut, blocages, prochaines étapes.
-
-## Workflow Opérationnel
-
-Avant chaque étape importante :
-1. Expliquer le plan
-2. Montrer les fichiers à modifier
-3. Exécuter les changements
-4. Résumer ce qui a été modifié
-
-## Politique d’Autorisation
-
-Claude peut automatiquement :
-- lire les fichiers
-- modifier les fichiers
-- exécuter du code Python
-- exécuter des commandes uv
-- consulter les logs et l’état des conteneurs Docker
-- lancer les tests
-
-Claude doit demander une autorisation avant :
-- supprimer des fichiers
-- arrêter des conteneurs
-- effectuer un git push
-- modifier l’infrastructure
-
----
-
-*Fin du plan d'exécution LOGIVISION v5 — Document destiné à Claude Code — Mise à jour 19 Mai 2026*

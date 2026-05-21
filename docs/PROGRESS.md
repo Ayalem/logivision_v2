@@ -1,6 +1,6 @@
 # PROGRESS
 
-Lightweight, append-only status log. The authoritative plan is `CLAUDE.md`.
+Lightweight, append-only status log. The authoritative plan is `PROJECT_PLAN.md`.
 
 Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 

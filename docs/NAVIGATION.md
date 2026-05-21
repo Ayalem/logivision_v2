@@ -9,7 +9,7 @@
 ```
 logivision/
 │
-├── CLAUDE.md         ← le plan théorique (1500 lignes — la "spec")
+├── PROJECT_PLAN.md         ← le plan théorique (1500 lignes — la "spec")
 ├── README.md         ← quickstart 5 commandes
 ├── CONTRIBUTING.md   ← workflow git + branch protection
 ├── Makefile          ← 35 commandes (point d'entrée pour TOUT)
@@ -173,7 +173,7 @@ Ce qui rend ce projet "production-grade" plutôt qu'un POC :
 
 ### 2.5 Limites et travaux futurs
 
-- **Frontend pas démarré** : CLAUDE.md liste la stack React + Vite + Tailwind mais aucun sprint frontend ; un PR `docs(claude): add frontend sprints` est requis.
+- **Frontend pas démarré** : PROJECT_PLAN.md liste la stack React + Vite + Tailwind mais aucun sprint frontend ; un PR `docs(plan): add frontend sprints` est requis.
 - **Flink remplacé par Python** : le CEP tourne en un seul process Python avec état en mémoire. Pour scale > 1 caméra à 30 fps, il faut le vrai cluster Flink (interface compatible déjà respectée).
 - **Retraining trigger** : `drift_monitor.py` détecte mais ne déclenche pas. Le GitHub Action `.github/workflows/retrain-on-drift.yml` reste à écrire (Phase 5).
 - **Tracking ByteTrack** : `cep.py` utilise un track_id heuristique (centroid quantisé). Vrai tracking via Ultralytics `model.track(...)` à intégrer.

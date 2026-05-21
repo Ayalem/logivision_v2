@@ -1,6 +1,6 @@
 """Complex Event Processing on the `detections` stream → emits `events`.
 
-CLAUDE.md §6.3 describes 3 Flink jobs (stationary_detection, zone_violation,
+PROJECT_PLAN.md §6.3 describes 3 Flink jobs (stationary_detection, zone_violation,
 kpi_aggregator). Running a full Flink cluster locally is heavy; this module
 ships the same logic as a single Python process backed by an in-process
 state store. It is *good enough* for the academic demo and for local
