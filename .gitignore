@@ -10,11 +10,14 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
+# These four are Python distutils/setuptools build folders. They MUST be
+# anchored to the repo root, otherwise they catch real source paths like
+# frontend/src/lib/ and Python services/.../lib/.
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
 wheels/
 share/python-wheels/
 *.egg-info/
