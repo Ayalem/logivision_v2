@@ -96,6 +96,14 @@ export function DigitalTwin() {
         <FallbackSvg />
       )}
 
+      {/* HONESTY BADGE — the twin is an abstract layout driven by the
+          7 polygons in infra/zones.example.yaml, NOT a 3D scan of the
+          real warehouse. Make this explicit so the jury doesn't think
+          we built a Unity digital twin. */}
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[10px] font-mono px-2 py-1 rounded bg-background/85 ring-1 ring-border text-muted-foreground pointer-events-none">
+        abstract layout · driven by infra/zones.yaml · not a 3D scan
+      </div>
+
       {/* HUD — layer & overlay toggles */}
       <div className="absolute top-3 left-3 flex flex-col gap-2">
         <div className="glass-card rounded-xl px-2 py-1.5 flex items-center gap-1 text-[10px] font-medium">

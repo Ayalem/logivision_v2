@@ -60,7 +60,10 @@ interface AppState {
 const LIVE_BUFFER_MAX = 200
 
 export const useAppStore = create<AppState>((set) => ({
-  currentView: 'overview',
+  // Land on the Caméras view by default — the operator's primary
+  // concern is what each camera sees. The Overview/3D twin lives one
+  // click away in the sidebar.
+  currentView: 'cameras',
   sidebarCollapsed: false,
   focusMode: false,
   commandPaletteOpen: false,
