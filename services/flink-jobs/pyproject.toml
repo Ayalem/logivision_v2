@@ -1,0 +1,8 @@
+[project]
+name = "flink-jobs"
+version = "0.1.0"
+description = "Logivision CEP jobs — Apache Flink / PyFlink"
+requires-python = ">=3.11"
+
+[project.dependencies]
+apache-flink = "1.18.1"
