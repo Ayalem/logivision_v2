@@ -10,73 +10,33 @@ Legend: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 
 ### Sprint 1.1 — Bootstrap MLOps Stack
 
-- [x] **T1.1.1** Init repo + outillage — merged to `develop` (and `main`).
-- [x] **T1.1.2** Stack MLOps locale (Postgres + MinIO + MLflow) — merged to `develop`.
-  - Acceptance: `./scripts/bootstrap.sh` = **13 s** (target < 90 s); 4/4 smoke tests green; containers prefixed `logivision-mlops-*` to coexist with the prior v4 stack (stopped, volumes preserved); MLflow port configurable via `MLFLOW_PORT` (default 5050 to avoid macOS ControlCenter on :5000).
-- [x] **T1.1.3** DVC + MinIO remote — merged to `develop`. `make dvc-{push,pull,status}` + `docs/mlops/dvc-guide.md`.
-
-**Sprint 1.1 — closed ✅**
+- [~] **T1.1.1** Init repo + outillage (PR opened on `feature/T1.1.1-init-tooling`)
+  - Files: `pyproject.toml`, `.pre-commit-config.yaml`, `Makefile`, `.gitignore`, `.dockerignore`, `.env.example`, `README.md`, `CONTRIBUTING.md`, `LICENSE`, `NOTICE.md`, `.github/pull_request_template.md`, `docs/PROGRESS.md`.
+  - Acceptance: `make install` < 60 s; `make lint` green on empty tree; `pre-commit run --all-files` green; README < 200 words.
+- [ ] **T1.1.2** Stack MLOps locale (Postgres + MinIO + MLflow) via Docker Compose, `scripts/bootstrap.sh`, smoke test.
+- [ ] **T1.1.3** Setup DVC + MinIO remote + `docs/mlops/dvc-guide.md`.
 
 ### Sprint 1.2 — Pipeline Données
 
-- [x] **T1.2.1** Frame extraction (`ml/scripts/extract_frames.py`) — merged to `develop`.
-- [x] **T1.2.2** CVAT stack + YOLO export importer — merged to `develop`. Manual annotation step deferred until real videos exist.
-- [x] **T1.2.3** DVC pipeline — merged to `develop`.
-
-**Sprint 1.2 — closed ✅** (manual CVAT annotation deferred until raw videos exist; structure ready).
+- [ ] T1.2.1 Frame extraction script + tests.
+- [ ] T1.2.2 CVAT self-hosted + import pipeline + `data.yaml` generator.
+- [ ] T1.2.3 DVC pipeline.
 
 ### Sprint 1.3 — Training + MLflow
 
-- [x] **T1.3.1** Training script + MLflow tracking — merged to `main`. 7/7 mocked tests.
-- [x] **T1.3.2** Integration training test — merged to `main`. 15s end-to-end real run.
-- [x] **T1.3.3** Colab/Kaggle training doc + notebook template — merged to `main`.
-
-**Sprint 1.3 — closed ✅**
+- [ ] T1.3.1 `ml/scripts/train.py` + config.
+- [ ] T1.3.2 Tests.
+- [ ] T1.3.3 Colab training guide.
 
 ### Sprint 1.4 — Registry + Promotion + OpenVINO
 
-- [x] **T1.4.1** Promotion script + ADR 0003 — `ml/scripts/promote_model.py` (9/9 mocked tests).
-- [x] **T1.4.2** OpenVINO FP32 + INT8 (NNCF) export — `ml/scripts/export_openvino.py` (9/9 mocked tests). Adds `openvino` + `nncf` to `ml` deps.
-- [x] **T1.4.3** Inference benchmark + Markdown report — `ml/scripts/benchmark_inference.py` (7/7 mocked tests). Reports under `docs/mlops/benchmarks/`.
-
-**Sprint 1.4 — closed ✅** (a real bench requires a fully-exported run; the user's existing T1.3.2 run only has PyTorch weights — re-run `make export-openvino RUN=<id>` first, then `make benchmark RUN=<id>`).
-
-### Sprint 1.5 — Multi-architecture comparison
-
-- [~] **T1.5.1 (partial)** Multi-arch sweep — `ml/scripts/compare_archs.py` + `ml/configs/comparison.yaml`. Trains YOLOv8n / YOLOv11n / RT-DETR-l on the same dataset with shared hyperparams + augmentation (mosaic, mixup, HSV, flips, rotation), logs each to MLflow with a `comparison_group` tag, writes Markdown + JSON report under `docs/mlops/comparisons/`. 5/5 mocked tests. Run with `make compare-archs`.
-- [ ] **T1.5.2** Optuna hyperparam search (deferred — Ray of diminishing returns on synthetic data).
-- [ ] **T1.5.3** Final comparison report once `make compare-archs` has actually run on the demo dataset (`make demo-data` first).
-- _Bonus_ — **Real-data sourcing** : `scripts/fetch_pexels_videos.py` uses the Pexels free API (CC0 license) to fetch warehouse videos legally; no scraping. `make fetch-videos` (needs `PEXELS_API_KEY` from <https://www.pexels.com/api/>). Also identified TalTech synthetic warehouse dataset (MIT, 4 records on data.taltech.ee, ~10 GB) and DataDryad 6D-ViCuT (CC0, cuboid tracking) — gated by user's wifi.
-
-### Sprint 1.6 — Serving (BentoML)
-
-- [x] **T1.6** Done. BentoML service serves at :3000 (yolov8n.pt fallback à défaut de Production), load test stdlib, premier rapport sous `docs/mlops/benchmarks/load_*.md`.
-
-### Sprint 1.7 — Drift monitoring
-
-- [x] **T1.7.1** Drift detection — `ml/scripts/drift_monitor.py`. Compare deux snapshots de features (CSV/Parquet, schéma `brightness/contrast/n_detections/avg_confidence`) via Evidently DataDriftPreset (PSI). Fallback `_fallback_psi` en numpy pur si Evidently absent. Produit HTML + JSON sous `docs/mlops/drift/`.
-- [x] **T1.7.2** Metrics — `render_prometheus()` sort un format scrapeable (`logivision_drift_score{feature="..."}` + `logivision_drift_detected`). Exit code 1 si drift détecté → utilisable dans un cron / CI step.
-- [ ] **T1.7.3** Retraining trigger via GitHub Actions (reporté en Phase 5).
-- _Bonus_ — `scripts/fetch_kaggle.py` + `make fetch-kaggle DATASET=...` pour télécharger tout dataset Kaggle annoté (besoin de `KAGGLE_USERNAME` + `KAGGLE_KEY` dans `.env`).
-
----
-
-## Phase 2 — Streaming Kafka + Flink
-
-- [~] **T2.0 Kafka stack** on `main`.
-  - Files: `infra/docker-compose/docker-compose.kafka.yml` (KRaft, no ZooKeeper) + oneshot topic-init container + Apicurio Schema Registry + Kafka UI.
-  - Topics created: `raw-frames` (6 part, 1h retention), `detections` (6 part, 24h), `tracks` (6 part, 24h), `events` (3 part, 7d, compact), `model-drift` (1 part, 30d).
-  - Avro schemas under `infra/kafka/schemas/{RawFrame,Detection,Event}.avsc`.
-- [~] **T2.1 Inference worker** — `services/inference_worker/worker.py`. Consumes `raw-frames`, downloads JPG bytes from MinIO, runs YOLO (model resolved via the same Registry logic as the BentoML service), publishes to `detections`. Idempotent via `frame_id` partition key. JSON wire format for now; Avro/Apicurio upgrade tracked for T2.2.
-- [ ] **T2.2** frame-grabber service (RTSP → MinIO + Kafka).
-- [ ] **T2.3** Flink jobs (CEP: stationary_object, zone_violation; aggregator → ClickHouse).
-  - Files: `services/model_server/{service.py,bentofile.yaml,Dockerfile,tests/test_service.py}`, `tests/load/load_test.py`, `Makefile` (`serve`, `serve-build`, `load-test`).
-  - Tech: BentoML 1.3 service that resolves the model at boot via `MlflowClient.search_model_versions` (Production → Staging → local fallback `yolov8n.pt`). Pydantic v2 response schema (`Detection`, `InferenceResponse`). Pure-stdlib load tester (no `k6` install) measuring p50/p95/p99 latency + RPS at concurrency levels 1/5/10.
-  - Acceptance: 9/9 mocked unit tests on the resolver. The Bento builds (`make serve-build`) and serves locally (`make serve`).
+- [ ] T1.4.1 Promotion script + thresholds.
+- [ ] T1.4.2 OpenVINO export (FP32 + INT8 NNCF).
+- [ ] T1.4.3 Benchmark script + report.
 
 ### Sprint 1.5 — Model comparison
 
-- [ ] T1.5.1 Multi-arch training (YOLOv8n, YOLOv11n, RT-DETR, optional YOLOv10n).
+- [ ] T1.5.1 Mul1ti-arch training (YOLOv8n, YOLOv11n, RT-DETR, optional YOLOv10n).
 - [ ] T1.5.2 Optuna hyperparam search.
 - [ ] T1.5.3 Comparison report.
 
@@ -106,14 +66,8 @@ _Not started._
 ## Phase 5 — Infra / observability / CI/CD
 _Not started (may start in parallel from Sprint 1.4)._
 
-## Frontend track (web dashboard) — _planning pending_
-
-CLAUDE.md defines the stack (`§3.5`: React + Vite + Tailwind + TanStack Query + Recharts) and shows the dashboard in the architecture (`§2.1`), but does **not** plan it as numbered sprints. The dashboard is implicitly required from Sprint 1.4 (`benchmark charts`) and explicitly from Sprint 1.7 (`Evidently report viewer`).
-
-A follow-up PR `docs(claude): add frontend sprints` will add an F-series of sprints to CLAUDE.md (proposed: F.1 scaffold, F.2 detection viewer, F.3 model perf dashboard, F.4 drift / alerts).
-
 ---
 
 ## Blockers / decisions log
 
-- `2026-05-19` — Frontend not planned as explicit sprints in CLAUDE.md. To be addressed in a dedicated `docs(claude)` PR after T1.1.1 merges.
+_None._

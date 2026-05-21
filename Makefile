@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -165,3 +165,19 @@ api: ## Start the FastAPI dashboard backend on :8000 (also serves the frontend).
 eval: ## Evaluate the registered model (Sprint 1.3)
 	@test -f ml/scripts/eval.py || { echo "ERROR: ml/scripts/eval.py not yet created (Sprint 1.3)."; exit 1; }
 	$(UV) run python ml/scripts/eval.py --config ml/configs/yolov8n.yaml
+
+# ---------------------------------------------------------------------------
+# Frontend (Vite + React + R3F warehouse dashboard)
+# ---------------------------------------------------------------------------
+
+frontend-install: ## Install npm dependencies for frontend/
+	cd frontend && npm install --no-audit --no-fund
+
+frontend-dev: ## Run the Vite dev server (http://localhost:5173, proxies /api + /ws to :8000)
+	cd frontend && npm run dev
+
+frontend-build: ## Produce a production build at frontend/dist/ (served by FastAPI at /)
+	cd frontend && npm run build
+
+frontend-clean: ## Wipe frontend/dist and frontend/node_modules (irreversible)
+	rm -rf frontend/dist frontend/node_modules

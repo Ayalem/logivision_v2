@@ -34,7 +34,12 @@ from fastapi.staticfiles import StaticFiles
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-FRONTEND_DIR = REPO_ROOT / "services" / "frontend"
+# Prefer the Vite production build (`make frontend-build`) when it exists;
+# fall back to the legacy single-file dashboard for environments that
+# haven't built the new app yet.
+FRONTEND_VITE_DIR = REPO_ROOT / "frontend" / "dist"
+FRONTEND_LEGACY_DIR = REPO_ROOT / "services" / "frontend"
+FRONTEND_DIR = FRONTEND_VITE_DIR if FRONTEND_VITE_DIR.is_dir() else FRONTEND_LEGACY_DIR
 
 MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5050")
 KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092")
@@ -50,6 +55,14 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="LOGIVISION API", version="0.1.0", lifespan=lifespan)
+
+# Client-facing endpoints (zones, cameras, anomalies, KPIs, entries/exits, /api/me).
+# Kept in a sibling module so this file stays focused on MLOps/admin routes.
+from services.api.routers import client as client_router  # noqa: E402
+from services.api.routers import stream as stream_router  # noqa: E402
+
+app.include_router(client_router.router)
+app.include_router(stream_router.router)
 
 
 # ---------- helpers ----------
@@ -314,3 +327,10 @@ def index() -> JSONResponse | FileResponse:
 
 if FRONTEND_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+
+# The Vite build references /assets/<hash>.{js,css} from index.html. When
+# `frontend/dist/` is present we mount its assets/ directory directly at
+# /assets so the SPA loads in production without any extra reverse proxy.
+_vite_assets = FRONTEND_VITE_DIR / "assets"
+if _vite_assets.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_vite_assets)), name="frontend-assets")

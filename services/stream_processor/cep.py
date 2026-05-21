@@ -11,7 +11,11 @@ Rules implemented:
     - stationary_object — a tracked object whose centroid stays within
       `stationary_radius_px` for `stationary_window_s` emits one event.
     - zone_violation    — when a track's centroid is inside any zone
-      flagged `forbidden=true` (loaded from `--zones config.yaml`).
+      with `kind: forbidden` (or legacy `forbidden: true`).
+    - entry             — when a track first lands in a zone with
+      `kind: entry`. Severity = info; powers the "Entrées" KPI.
+    - exit              — when a track first lands in a zone with
+      `kind: exit`. Severity = info; powers the "Sorties" KPI.
 
 The consumer reads `detections` (not `tracks`) for now; the projected
 upgrade is to add a ByteTrack stage between `detections` and `events`
@@ -56,11 +60,19 @@ class TrackState:
     last_zone: str | None = None
 
 
+# Allowed values for Zone.kind. `forbidden` keeps the legacy behaviour
+# (emits zone_violation). `entry` / `exit` drive the warehouse KPIs.
+# `shelf` is a passive zone — useful for occupancy aggregates without
+# firing events.
+ZONE_KINDS = ("forbidden", "entry", "exit", "shelf")
+
+
 @dataclass
 class Zone:
     name: str
     forbidden: bool
     polygon: list[tuple[float, float]]  # (x, y) in normalized 0..1 coordinates
+    kind: str = "forbidden"  # one of ZONE_KINDS
 
 
 @dataclass
@@ -105,11 +117,24 @@ def _load_zones(path: Path | None) -> list[Zone]:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     zones: list[Zone] = []
     for entry in raw.get("zones", []):
+        forbidden = bool(entry.get("forbidden", False))
+        # `kind` may be set explicitly; otherwise derive from legacy
+        # `forbidden` flag (True → forbidden, False → shelf).
+        kind = entry.get("kind") or ("forbidden" if forbidden else "shelf")
+        if kind not in ZONE_KINDS:
+            logger.warning(
+                "zone %r has unknown kind=%r, falling back to shelf", entry["name"], kind
+            )
+            kind = "shelf"
+        # Keep `forbidden` consistent with `kind` so legacy callers stay happy.
+        if kind == "forbidden":
+            forbidden = True
         zones.append(
             Zone(
                 name=entry["name"],
-                forbidden=bool(entry.get("forbidden", False)),
+                forbidden=forbidden,
                 polygon=[(p["x"], p["y"]) for p in entry["polygon"]],
+                kind=kind,
             )
         )
     return zones
@@ -165,6 +190,22 @@ def evaluate_zone_violation(
     nx, ny = _normalised_centroid(detection, image_w, image_h)
     for zone in zones:
         if zone.forbidden and _point_in_polygon((nx, ny), zone.polygon):
+            return zone
+    return None
+
+
+def evaluate_zone_membership(
+    detection: dict,
+    image_w: int,
+    image_h: int,
+    zones: list[Zone],
+) -> Zone | None:
+    """Return the first zone whose polygon contains the centroid (any kind)."""
+    if not zones:
+        return None
+    nx, ny = _normalised_centroid(detection, image_w, image_h)
+    for zone in zones:
+        if _point_in_polygon((nx, ny), zone.polygon):
             return zone
     return None
 
@@ -228,19 +269,46 @@ def process_one(
                 )
             )
 
-        violated = evaluate_zone_violation(detection, image_w, image_h, zones)
-        if violated is not None and state.last_zone != violated.name:
-            state.last_zone = violated.name
-            emitted.append(
-                make_event(
-                    event_type="zone_violation",
-                    severity="critical",
-                    camera_id=camera_id,
-                    track_id=track_id,
-                    payload={"zone": violated.name, "class_name": detection.get("class_name", "")},
-                    timestamp_ms=timestamp_ms,
+        # Dispatch on the zone's kind: forbidden → critical violation;
+        # entry/exit → info event used by the KPI tiles; shelf → silent.
+        zone = evaluate_zone_membership(detection, image_w, image_h, zones)
+        if zone is not None and state.last_zone != zone.name:
+            state.last_zone = zone.name
+            payload = {"zone": zone.name, "class_name": detection.get("class_name", "")}
+            if zone.kind == "forbidden":
+                emitted.append(
+                    make_event(
+                        event_type="zone_violation",
+                        severity="critical",
+                        camera_id=camera_id,
+                        track_id=track_id,
+                        payload=payload,
+                        timestamp_ms=timestamp_ms,
+                    )
                 )
-            )
+            elif zone.kind == "entry":
+                emitted.append(
+                    make_event(
+                        event_type="entry",
+                        severity="info",
+                        camera_id=camera_id,
+                        track_id=track_id,
+                        payload=payload,
+                        timestamp_ms=timestamp_ms,
+                    )
+                )
+            elif zone.kind == "exit":
+                emitted.append(
+                    make_event(
+                        event_type="exit",
+                        severity="info",
+                        camera_id=camera_id,
+                        track_id=track_id,
+                        payload=payload,
+                        timestamp_ms=timestamp_ms,
+                    )
+                )
+            # `shelf` is a passive zone — no event, just remembers presence.
     return emitted
 
 

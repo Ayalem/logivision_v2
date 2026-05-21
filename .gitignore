@@ -52,6 +52,11 @@ node_modules/
 .npm/
 .yarn/
 .next/
+frontend/tsconfig.tsbuildinfo
+frontend/dist/
+
+# Local design reference (Next.js inspo) — kept on disk for prompting, never committed.
+inspo_frontend/
 .nuxt/
 .parcel-cache/
 .vite/

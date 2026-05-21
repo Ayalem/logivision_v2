@@ -1,0 +1,50 @@
+# Camera registry consumed by GET /api/cameras.
+# This is intentionally a static config for the demo — in prod the grabber
+# would publish heartbeats to a `camera-health` topic and the API would
+# materialise the registry from there.
+#
+# Fields:
+#   id          — stable ID used everywhere (events, frame_uri, UI).
+#                 Matches the --camera-id flag passed to the frame grabber.
+#   name        — human label for the dashboard.
+#   location    — physical placement description.
+#   zone        — id of the zone the camera primarily covers (matches infra/zones.yaml).
+#   resolution  — "WxH" advertised by the source.
+#   fps_target  — frames per second the grabber is configured to publish.
+#   rtsp_url    — optional, used by mediamtx; omitted = file source for demos.
+
+cameras:
+  - id: CAM01
+    name: Entrée Principale
+    location: Porte A
+    zone: entrance_dock
+    resolution: 1920x1080
+    fps_target: 5
+
+  - id: CAM02
+    name: Quai d'Expédition
+    location: Porte B
+    zone: exit_dock
+    resolution: 1920x1080
+    fps_target: 5
+
+  - id: CAM03
+    name: Allée Stockage A1-A2
+    location: Travée centrale nord
+    zone: shelf_A1
+    resolution: 1280x720
+    fps_target: 5
+
+  - id: CAM04
+    name: Allée Stockage A3-A4
+    location: Travée centrale sud
+    zone: shelf_A3
+    resolution: 1280x720
+    fps_target: 5
+
+  - id: CAM05
+    name: Allée Restreinte
+    location: Couloir technique
+    zone: forbidden_aisle
+    resolution: 1920x1080
+    fps_target: 5

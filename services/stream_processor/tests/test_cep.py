@@ -18,6 +18,7 @@ from services.stream_processor.cep import (
     _load_zones,
     _point_in_polygon,
     evaluate_stationary,
+    evaluate_zone_membership,
     evaluate_zone_violation,
     process_one,
 )
@@ -179,3 +180,174 @@ def test_load_zones_parses_yaml(tmp_path: Path) -> None:
 def test_load_zones_handles_missing_file(tmp_path: Path) -> None:
     assert _load_zones(tmp_path / "nope.yaml") == []
     assert _load_zones(None) == []
+
+
+# ---------- kind dispatch (entry / exit / shelf) ----------
+
+
+def test_load_zones_reads_kind_field(tmp_path: Path) -> None:
+    p = tmp_path / "zones.yaml"
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "zones": [
+                    {
+                        "name": "in",
+                        "kind": "entry",
+                        "polygon": [
+                            {"x": 0, "y": 0},
+                            {"x": 1, "y": 0},
+                            {"x": 1, "y": 1},
+                            {"x": 0, "y": 1},
+                        ],
+                    },
+                    {
+                        "name": "out",
+                        "kind": "exit",
+                        "polygon": [
+                            {"x": 0, "y": 0},
+                            {"x": 1, "y": 0},
+                            {"x": 1, "y": 1},
+                            {"x": 0, "y": 1},
+                        ],
+                    },
+                    {
+                        "name": "wall",
+                        "kind": "forbidden",
+                        "polygon": [
+                            {"x": 0, "y": 0},
+                            {"x": 1, "y": 0},
+                            {"x": 1, "y": 1},
+                            {"x": 0, "y": 1},
+                        ],
+                    },
+                ]
+            }
+        )
+    )
+    zones = _load_zones(p)
+    by_name = {z.name: z for z in zones}
+    assert by_name["in"].kind == "entry"
+    assert by_name["out"].kind == "exit"
+    assert by_name["wall"].kind == "forbidden"
+    # forbidden flag stays consistent with kind so legacy callers work.
+    assert by_name["wall"].forbidden is True
+    assert by_name["in"].forbidden is False
+
+
+def test_load_zones_defaults_kind_from_legacy_forbidden(tmp_path: Path) -> None:
+    p = tmp_path / "zones.yaml"
+    p.write_text(
+        yaml.safe_dump(
+            {
+                "zones": [
+                    {
+                        "name": "legacy_forbidden",
+                        "forbidden": True,
+                        "polygon": [
+                            {"x": 0, "y": 0},
+                            {"x": 1, "y": 0},
+                            {"x": 1, "y": 1},
+                            {"x": 0, "y": 1},
+                        ],
+                    },
+                    {
+                        "name": "legacy_allowed",
+                        "forbidden": False,
+                        "polygon": [
+                            {"x": 0, "y": 0},
+                            {"x": 1, "y": 0},
+                            {"x": 1, "y": 1},
+                            {"x": 0, "y": 1},
+                        ],
+                    },
+                ]
+            }
+        )
+    )
+    zones = _load_zones(p)
+    assert zones[0].kind == "forbidden"
+    assert zones[1].kind == "shelf"  # safe default for non-forbidden legacy zones
+
+
+def test_evaluate_zone_membership_returns_first_match() -> None:
+    zones = [
+        Zone(name="a", forbidden=False, polygon=[(0, 0), (0.5, 0), (0.5, 1), (0, 1)], kind="entry"),
+        Zone(name="b", forbidden=False, polygon=[(0.5, 0), (1, 0), (1, 1), (0.5, 1)], kind="exit"),
+    ]
+    # cx=200/1000=0.2 → inside "a"
+    assert evaluate_zone_membership(_det(150, 100, 250, 200), 1000, 1000, zones).name == "a"
+    # cx=750/1000=0.75 → inside "b"
+    assert evaluate_zone_membership(_det(700, 100, 800, 200), 1000, 1000, zones).name == "b"
+
+
+def test_process_one_emits_entry_event_for_entry_zone() -> None:
+    # Narrow zone 0..0.25 so only the target carton (nx≈0.1) lands inside;
+    # the calibration detection that fixes image_w sits at nx≈0.5 (outside).
+    zones = [
+        Zone(
+            name="dock_in",
+            forbidden=False,
+            polygon=[(0, 0), (0.25, 0), (0.25, 1), (0, 1)],
+            kind="entry",
+        ),
+    ]
+    cfg = CEPConfig()
+    states: dict = defaultdict(TrackState)
+    msg = {
+        "camera_id": "CAM1",
+        "timestamp_ms": 1000,
+        # target carton cx=40, calibration carton cx=100; image_w=max(x2)=200
+        # → target nx=0.2 inside entry zone, calibration nx=0.5 outside.
+        "detections": [_det(20, 20, 60, 60, class_id=1), _det(50, 0, 200, 200, class_id=2)],
+    }
+    events = process_one(msg, states, zones, cfg)
+    entries = [e for e in events if e["event_type"] == "entry"]
+    assert len(entries) == 1
+    assert entries[0]["severity"] == "info"
+    assert entries[0]["payload"]["zone"] == "dock_in"
+    # Re-firing on the same track: dedupe via last_zone.
+    events2 = process_one(msg, states, zones, cfg)
+    assert not any(e["event_type"] == "entry" for e in events2)
+
+
+def test_process_one_emits_exit_event_for_exit_zone() -> None:
+    # Narrow zone 0.75..1.0 so only the target carton lands inside.
+    zones = [
+        Zone(
+            name="dock_out",
+            forbidden=False,
+            polygon=[(0.75, 0), (1, 0), (1, 1), (0.75, 1)],
+            kind="exit",
+        ),
+    ]
+    cfg = CEPConfig()
+    states: dict = defaultdict(TrackState)
+    msg = {
+        "camera_id": "CAM1",
+        "timestamp_ms": 2000,
+        # target cx=170, calibration cx=100; image_w=max(x2)=200
+        # → target nx=0.85 inside, calibration nx=0.5 outside.
+        "detections": [_det(140, 50, 200, 90, class_id=1), _det(0, 0, 200, 200, class_id=2)],
+    }
+    events = process_one(msg, states, zones, cfg)
+    exits = [e for e in events if e["event_type"] == "exit"]
+    assert len(exits) == 1
+    assert exits[0]["severity"] == "info"
+    assert exits[0]["payload"]["zone"] == "dock_out"
+
+
+def test_process_one_shelf_kind_emits_no_event() -> None:
+    zones = [
+        Zone(name="rack", forbidden=False, polygon=[(0, 0), (1, 0), (1, 1), (0, 1)], kind="shelf"),
+    ]
+    cfg = CEPConfig()
+    states: dict = defaultdict(TrackState)
+    msg = {
+        "camera_id": "CAM1",
+        "timestamp_ms": 3000,
+        "detections": [_det(40, 40, 60, 60), _det(0, 0, 100, 100)],
+    }
+    events = process_one(msg, states, zones, cfg)
+    # No CEP event types are emitted for shelf zones.
+    assert all(e["event_type"] not in {"entry", "exit", "zone_violation"} for e in events)
