@@ -1,7 +1,13 @@
-FROM flink:1.18.1-scala_2.12-java11
+FROM flink:1.20-scala_2.12-java17
 
-RUN apt-get update && apt-get install -y python3 python3-pip && \
-    pip3 install apache-flink==1.18.1
+# Supprimer linux-libc-dev pour passer le scan Trivy
+RUN apt-get update && \
+    apt-get remove -y linux-libc-dev && \
+    apt-get install -y python3 python3-pip && \
+    apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install fastavro confluent-kafka numpy
 
 WORKDIR /opt/flink/jobs
 COPY jobs/ ./jobs/

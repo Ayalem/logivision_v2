@@ -1,122 +1,93 @@
-# LOGIVISION — local MLOps stack (Sprint 1.1.2).
-# Services: PostgreSQL (metadata), MinIO (object storage), MLflow (tracking + registry).
-# Start via `./scripts/bootstrap.sh` (creates `.env` if missing, waits for health).
-
-name: logivision-mlops
-
 services:
-
   postgres:
     image: postgres:16-alpine
-    container_name: logivision-mlops-postgres
-    restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:-logivision}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-logivision}
+      POSTGRES_DB: ${POSTGRES_DB:-logivision}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ../docker/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-logivision}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - logivision-net
 
   minio:
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z
-    container_name: logivision-mlops-minio
-    restart: unless-stopped
+    command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
     ports:
       - "9000:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "9001:9001"
     volumes:
-      - minio-data:/data
-    command: server /data --console-address ":9001"
+      - minio_data:/data
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-      start_period: 5s
-    networks:
-      - logivision-net
-
-  # Oneshot bucket bootstrap. Exits 0 once buckets exist.
-  minio-bootstrap:
-    image: minio/mc:RELEASE.2024-10-08T09-37-26Z
-    container_name: logivision-mlops-minio-bootstrap
-    depends_on:
-      minio:
-        condition: service_healthy
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      BUCKET_MLFLOW: ${BUCKET_MLFLOW:-mlflow}
-      BUCKET_DATASETS: ${BUCKET_DATASETS:-datasets}
-      BUCKET_MODELS: ${BUCKET_MODELS:-models}
-      BUCKET_FRAMES: ${BUCKET_FRAMES:-frames}
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - |
-        set -eu
-        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
-        for bucket in "$$BUCKET_MLFLOW" "$$BUCKET_DATASETS" "$$BUCKET_MODELS" "$$BUCKET_FRAMES"; do
-          mc mb --ignore-existing "local/$$bucket"
-        done
-        echo "MinIO buckets ready."
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - logivision-net
 
   mlflow:
-    build:
-      context: ../docker/mlflow
-      dockerfile: Dockerfile
-    image: logivision/mlflow:2.17.0
-    container_name: logivision-mlops-mlflow
-    restart: unless-stopped
+    image: ghcr.io/mlflow/mlflow:v2.17.0
+    environment:
+      MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER:-logivision}:${POSTGRES_PASSWORD:-logivision}@postgres:5432/${POSTGRES_DB:-logivision}
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://mlflow/
+      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    ports:
+      - "5000:5000"
     depends_on:
       postgres:
         condition: service_healthy
-      minio-bootstrap:
-        condition: service_completed_successfully
-    environment:
-      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
-      AWS_DEFAULT_REGION: us-east-1
-    command:
-      - mlflow
-      - server
-      - --host
-      - 0.0.0.0
-      - --port
-      - "5000"
-      - --backend-store-uri
-      - postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/mlflow
-      - --default-artifact-root
-      - s3://${BUCKET_MLFLOW:-mlflow}/
-      - --serve-artifacts
+      minio:
+        condition: service_healthy
+    networks:
+      - logivision-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
     ports:
-      - "${MLFLOW_PORT:-5050}:5000"
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - logivision-net
+
+  # Optional: pgadmin for debugging
+  pgadmin:
+    image: dpage/pgadmin4:8
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@logivision.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
     networks:
       - logivision-net
 
 volumes:
-  postgres-data:
-    name: logivision-postgres-data
-  minio-data:
-    name: logivision-minio-data
+  postgres_data:
+  minio_data:
+  clickhouse_data:
 
 networks:
   logivision-net:
-    name: logivision-net
     driver: bridge

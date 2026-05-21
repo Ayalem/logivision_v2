@@ -1,16 +1,12 @@
-"""
-Job Flink : Détection de colis stationnaires.
-Alerte si un objet tracké ne bouge pas pendant plus de STATIONARY_THRESHOLD_SEC secondes.
-"""
+"""Job Flink: Detect stationary objects. Alert if no movement > threshold."""
 
 from __future__ import annotations
 
-import json
 import os
 from dataclasses import dataclass
 from typing import Any
 
-from pyflink.common import SimpleStringSchema, WatermarkStrategy
+from pyflink.common import Duration, WatermarkStrategy
 from pyflink.common.typeinfo import Types
 from pyflink.datastream import StreamExecutionEnvironment
 from pyflink.datastream.connectors.kafka import (
@@ -22,135 +18,111 @@ from pyflink.datastream.connectors.kafka import (
 from pyflink.datastream.functions import KeyedProcessFunction, MapFunction
 from pyflink.datastream.state import ValueStateDescriptor
 
+from jobs.avro_utils import AvroDeserializationSchema, AvroSerializationSchema
+
 # ── Configuration ───────────────────────────────────────────────────────────────
 KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:9092")
-TOPIC_IN = os.getenv("TOPIC_DETECTIONS", "detections")
+TOPIC_IN = os.getenv("TOPIC_TRACKS", "tracks")  # Now reads tracks, not raw detections
 TOPIC_OUT = os.getenv("TOPIC_EVENTS", "events")
-STATIONARY_THRESHOLD_SEC = int(os.getenv("STATIONARY_THRESHOLD_SEC", "300"))
-MOVEMENT_THRESHOLD_PX = float(os.getenv("MOVEMENT_THRESHOLD_PX", "15.0"))
+STATIONARY_SEC = int(os.getenv("STATIONARY_THRESHOLD_SEC", "300"))
+MOVEMENT_PX = float(os.getenv("MOVEMENT_THRESHOLD_PX", "15.0"))
+COOLDOWN_SEC = int(os.getenv("STATIONARY_COOLDOWN_SEC", "60"))
 
 
-# ── Modèles de données ──────────────────────────────────────────────────────────
+# ── State ───────────────────────────────────────────────────────────────────────
 @dataclass
-class Detection:
-    object_id: str
-    label: str
-    x: float
-    y: float
-    confidence: float
-    timestamp: int
-
-    @staticmethod
-    def from_json(raw: str) -> Detection:
-        d = json.loads(raw)
-        return Detection(
-            object_id=str(d["object_id"]),
-            label=d.get("label", "unknown"),
-            x=float(d["x"]),
-            y=float(d["y"]),
-            confidence=float(d.get("confidence", 1.0)),
-            timestamp=int(d["timestamp"]),
-        )
-
-
-@dataclass
-class StationaryState:
-    first_seen_ts: int
+class TrackState:
+    first_seen_ms: int
     last_x: float
     last_y: float
-    alerted: bool = False
-
-
-# ── Fonctions Flink ─────────────────────────────────────────────────────────────
-class ParseDetection(MapFunction):
-    def map(self, raw: str) -> Detection:
-        try:
-            return Detection.from_json(raw)
-        except (KeyError, ValueError, json.JSONDecodeError):
-            return Detection("__invalid__", "unknown", 0.0, 0.0, 0.0, 0)
+    alerted_at_ms: int = 0  # 0 = never alerted
 
 
 class StationaryDetector(KeyedProcessFunction):
     def open(self, runtime_context: Any) -> None:
-        descriptor = ValueStateDescriptor("stationary_state", Types.PICKLED_BYTE_ARRAY())
+        descriptor = ValueStateDescriptor("track_state", Types.PICKLED_BYTE_ARRAY())
         self.state = runtime_context.get_state(descriptor)
 
-    def process_element(self, detection: Detection, _ctx: Any, out: Any) -> None:
-        if detection.object_id == "__invalid__":
-            return
+    def process_element(self, track: dict, _ctx: Any, out: Any) -> None:
+        track_id = track.get("track_id", "unknown")
+        x = float(track.get("x", 0.0))
+        y = float(track.get("y", 0.0))
+        ts = int(track.get("timestamp_ms", 0))
 
-        current: StationaryState | None = self.state.value()
-        now_ms = detection.timestamp
+        current: TrackState | None = self.state.value()
 
         if current is None:
+            self.state.update(TrackState(first_seen_ms=ts, last_x=x, last_y=y))
+            return
+
+        distance = ((x - current.last_x) ** 2 + (y - current.last_y) ** 2) ** 0.5
+
+        if distance > MOVEMENT_PX:
+            # Object moved — reset state but preserve alert cooldown
             self.state.update(
-                StationaryState(
-                    first_seen_ts=now_ms,
-                    last_x=detection.x,
-                    last_y=detection.y,
+                TrackState(
+                    first_seen_ms=ts,
+                    last_x=x,
+                    last_y=y,
+                    alerted_at_ms=current.alerted_at_ms,
                 )
             )
             return
 
-        distance = (
-            (detection.x - current.last_x) ** 2 + (detection.y - current.last_y) ** 2
-        ) ** 0.5
+        elapsed_sec = (ts - current.first_seen_ms) / 1000.0
 
-        if distance > MOVEMENT_THRESHOLD_PX:
-            self.state.update(
-                StationaryState(
-                    first_seen_ts=now_ms,
-                    last_x=detection.x,
-                    last_y=detection.y,
-                )
-            )
-            return
-
-        elapsed_sec = (now_ms - current.first_seen_ts) / 1000.0
-
-        if elapsed_sec >= STATIONARY_THRESHOLD_SEC and not current.alerted:
-            alert = {
-                "type": "STATIONARY_OBJECT",
-                "object_id": detection.object_id,
-                "label": detection.label,
-                "x": detection.x,
-                "y": detection.y,
-                "duration_sec": round(elapsed_sec, 1),
-                "timestamp": now_ms,
+        if elapsed_sec >= STATIONARY_SEC and (
+            current.alerted_at_ms == 0 or (ts - current.alerted_at_ms) >= COOLDOWN_SEC * 1000
+        ):
+            event = {
+                "event_id": f"{track_id}:{ts}",
+                "event_type": "stationary_object",
+                "severity": "warning",
+                "timestamp_ms": ts,
+                "camera_id": track.get("camera_id"),
+                "track_id": track_id,
+                "payload": {
+                    "duration_sec": str(int(elapsed_sec)),
+                    "label": track.get("label", "unknown"),
+                    "zone": track.get("zone", "unknown"),
+                },
             }
-            out.collect(json.dumps(alert))
-            self.state.update(
-                StationaryState(
-                    first_seen_ts=current.first_seen_ts,
-                    last_x=detection.x,
-                    last_y=detection.y,
-                    alerted=True,
-                )
-            )
+            out.collect(event)
+            current.alerted_at_ms = ts
+            self.state.update(current)
 
 
-# ── Pipeline principal ──────────────────────────────────────────────────────────
+class ParseTrack(MapFunction):
+    def map(self, msg: dict | None) -> dict | None:
+        if msg is None or "_error" in msg:
+            return None
+        return msg
+
+
+# ── Pipeline ────────────────────────────────────────────────────────────────────
 def build_pipeline(env: StreamExecutionEnvironment) -> None:
     source = (
         KafkaSource.builder()
         .set_bootstrap_servers(KAFKA_BROKER)
         .set_topics(TOPIC_IN)
         .set_starting_offsets(KafkaOffsetsInitializer.latest())
-        .set_value_only_deserializer(SimpleStringSchema())
+        .set_value_only_deserializer(AvroDeserializationSchema("Track"))
         .build()
     )
 
-    stream = env.from_source(
-        source,
-        WatermarkStrategy.no_watermarks(),
-        "kafka-detections-source",
-    )
+    watermark_strategy = WatermarkStrategy.for_bounded_out_of_orderness(
+        Duration.of_seconds(5)
+    ).with_idleness(Duration.of_seconds(30))
+
+    stream = env.from_source(source, watermark_strategy, "kafka-tracks-source")
 
     alerts = (
-        stream.map(ParseDetection(), output_type=Types.PICKLED_BYTE_ARRAY())
-        .filter(lambda d: d.object_id != "__invalid__")
-        .key_by(lambda d: d.object_id)
-        .process(StationaryDetector(), output_type=Types.STRING())
+        stream.map(ParseTrack(), output_type=Types.MAP(Types.STRING(), Types.PICKLED_BYTE_ARRAY()))
+        .filter(lambda t: t is not None)
+        .key_by(lambda t: t.get("track_id", "unknown"))
+        .process(
+            StationaryDetector(), output_type=Types.MAP(Types.STRING(), Types.PICKLED_BYTE_ARRAY())
+        )
     )
 
     sink = (
@@ -159,7 +131,7 @@ def build_pipeline(env: StreamExecutionEnvironment) -> None:
         .set_record_serializer(
             KafkaRecordSerializationSchema.builder()
             .set_topic(TOPIC_OUT)
-            .set_value_serialization_schema(SimpleStringSchema())
+            .set_value_serialization_schema(AvroSerializationSchema("Event"))
             .build()
         )
         .build()
@@ -170,7 +142,7 @@ def build_pipeline(env: StreamExecutionEnvironment) -> None:
 
 def main() -> None:
     env = StreamExecutionEnvironment.get_execution_environment()
-    env.set_parallelism(1)
+    env.set_parallelism(int(os.getenv("FLINK_PARALLELISM", "1")))
     build_pipeline(env)
     env.execute("logivision-stationary-detection")
 
