@@ -3,33 +3,17 @@
 > Real-time warehouse computer-vision platform.
 > Video → Kafka → YOLO + ByteTrack → QR → CEP → live operator dashboard.
 
-This single document is the onboarding guide *and* the master technical
-reference. Read top-to-bottom; jump to **Get Started** at the bottom when
-you're ready to run the demo.
-
----
-
-## How We Use Claude
-
-Based on Ayalem's usage over the last 30 days:
-
-Work Type Breakdown:
-  Build Feature  ██████████░░░░░░░░░░  50%
-  Plan & Design  ██████████░░░░░░░░░░  50%
-
-Top Skills & Commands:
-  /config  ████████████████████  3x/month
-
-Top MCP Servers:
-  _(none configured yet)_
+This single document is the project onboarding guide *and* the master
+technical reference. Read top-to-bottom; jump to **Get Started** at the
+bottom when you're ready to run the demo.
 
 ---
 
 ## Your Setup Checklist
 
 ### Codebases
-- [ ] **logivision_v2** — https://github.com/ayalem/logivision_v2
-  Main repo, default branch `main`, protected (PR required, status checks must pass).
+- [ ] **logivision_v2** — main repo, default branch `main`, protected
+  (PR required, status checks must pass).
 
 ### Local prerequisites
 - [ ] **Docker Desktop** running (for Kafka, MinIO, MLflow, CVAT stacks).
@@ -37,14 +21,6 @@ Top MCP Servers:
 - [ ] **Node 20+** for the React/Vite frontend.
 - [ ] **zbar** for QR decoding: `brew install zbar`.
 - [ ] **kaggle** CLI if you want to retrain: `pip install kagglehub` + add `~/.kaggle/kaggle.json`.
-
-### MCP Servers to Activate
-- [ ] _(none required for current work — add here when the team starts using one)_
-
-### Skills to Know About
-- [/config](https://docs.claude.com/en/docs/claude-code) — Tweak Claude Code settings (theme, model, permissions).
-- [/loop](https://docs.claude.com/en/docs/claude-code) — Re-run a prompt on a recurring interval (used when babysitting training runs).
-- [/security-review](https://docs.claude.com/en/docs/claude-code) — Run the bundled security review skill before pushing anything sensitive.
 
 ---
 
@@ -54,7 +30,7 @@ A **streaming computer-vision pipeline** for warehouse monitoring:
 
 - **Camera feeds** (synthetic warehouse videos for the demo; real RTSP cameras in production) flow into Kafka.
 - A YOLOv8 model fine-tuned on warehouse data **detects** every box / person / forklift.
-- **ByteTrack** assigns persistent IDs across frames so we can ask *“is this the same carton that arrived 30 s ago?”*.
+- **ByteTrack** assigns persistent IDs across frames so we can ask *"is this the same carton that arrived 30 s ago?"*.
 - **pyzbar** decodes any QR / barcode in the frame, turning a sticker into an authoritative `ZONE_ID:CATEGORY_ID`.
 - A **CEP module** runs 5 rules: stationary object, zone violation, entry, exit, box-falling.
 - Events stream over WebSocket to a **React + R3F dashboard** where operators see live MJPEG feeds, anomaly cards, and a 3D warehouse layout.
@@ -138,7 +114,7 @@ Each rule has cooldown to avoid spam. Defaults are in `services/stream_processor
 
 ## 6. What's a real trained model vs what's a rule
 
-Be honest with the jury about this:
+Honest summary:
 
 | Feature | Reality |
 |---|---|
@@ -146,22 +122,18 @@ Be honest with the jury about this:
 | **Object tracking** | **Library** — ByteTrack from the `trackers` package (Roboflow), no training required |
 | **QR decoding** | **Library** — `pyzbar` wrapping native `libzbar`, deterministic |
 | **Stationary / entry / exit / zone-violation / box-falling** | **Rule-based CEP** — geometric + temporal heuristics, not ML |
-| **Congestion forecast** (visible on dashboard, "AI" badge) | **Trained model** — 2-layer LSTM trained on **METR-LA spatiotemporal occupancy benchmark** (15 MB, public). Inputs: 30-step rolling window of `(occupancy_t, weekday, hour_of_day)` per zone. Output: P(congestion in next 5 / 10 / 15 min). RMSE / MAE reported on the held-out METR-LA test split. Domain-transferred to warehouse zone occupancy at inference time — the paper's Methodology section explicitly cites the transfer. See `ml/notebooks/05_congestion_lstm.ipynb`. |
-| Collision risk (visible on dashboard, "rule v0" badge) | **Rule-based** — two stationary events same zone within 30 s. Future-work upgrade path: LightGBM trained on MOT17-derived near-misses (5 GB, deferred — explicitly noted in the paper's "Future Work" section). |
+| **Congestion forecast** (visible on dashboard) | **Trained model** — 2-layer LSTM trained on **UCI Beijing Multi-Site Air-Quality (PRSA)** (33 MB, public). Inputs: 24-h rolling window of hourly readings per node. Output: occupancy 1 / 3 / 6 h ahead. RMSE / MAE reported on the held-out test split. Domain-transferred to warehouse zone occupancy at inference time. See `ml/notebooks/05_congestion_lstm.ipynb`. |
+| Collision risk (visible on dashboard) | **Rule-based** — two stationary events same zone within 30 s. Future-work upgrade path: LightGBM trained on MOT17-derived near-misses (5 GB, deferred — explicitly noted in the paper's "Future Work" section). |
 
-**Why this asymmetry**: the congestion model is the trained one because METR-LA (15 MB, no auth, ~5 min CPU training) fits the 3-day budget. The collision-risk LightGBM would need MOT17 (~5 GB) — explicitly deferred. We do NOT train on synthetic data we made up; the paper would not survive review.
+**Why this asymmetry**: the congestion model is the trained one because UCI PRSA (33 MB, no auth, ~5 min CPU training) fits the 3-day budget. The collision-risk LightGBM would need MOT17 (~5 GB) — explicitly deferred. We do NOT train on synthetic data we made up; the paper would not survive review.
 
 The dashboard surfaces this distinction clearly:
-- **Congestion ETA panel** badge: `LSTM · METR-LA-transferred · v1`
+- **Congestion ETA panel** badge: `LSTM · PRSA-transferred · v1`
 - **Collision risk panel** badge: `rule v0 · upgrade to LightGBM in roadmap`
-
-When the new teammate refreshes the dashboard they should see at least one panel labelled with the trained model — that's the proof of life for the "we have ML, not just rules" claim.
 
 ---
 
 ## 7. Three-day sprint plan
-
-This is the active plan. Day 1 shipped on `origin/main`; Day 2 and 3 still to go.
 
 ### Day 1 — done ✅ (7 commits live)
 
@@ -182,15 +154,15 @@ This is the active plan. Day 1 shipped on `origin/main`; Day 2 and 3 still to go
 | ID | Task | Note |
 |---|---|---|
 | D2.1 | Promote Colab-trained model to Production | `make register-from-colab RUN=<name>` after Colab finishes |
-| D2.2 | Frontend visual polish (4 specific changes) | Camera tile header icons, sidebar accents, anomalies feed coloring, REC indicator |
+| D2.2 | Frontend visual polish | Camera tile header icons, sidebar accents, anomalies feed coloring, REC indicator |
 | D2.3 | Notebook 01 — data preprocessing | EDA, OBB→AABB, splits, augmentation, DVC, CVAT workflow |
 | D2.4 | Notebook 04 — accuracy evaluation | Real metrics on hand-labelled ground truth (mAP, MOTA, IDF1, QR success, entry/exit P/R) |
-| **D2.4b** | **Notebook 05 — congestion LSTM on METR-LA** | **Trained model: 2-layer LSTM, RMSE / MAE on held-out test split, transfer methodology to warehouse zones documented. Reported back in the Système panel of the dashboard.** |
-| D2.5 | GitHub Actions CI (ruff + mypy + pytest) | Required status check for branch protection |
+| **D2.4b** | **Notebook 05 — congestion LSTM on UCI PRSA** | **Trained model: 2-layer LSTM, RMSE / MAE on held-out test split, transfer methodology to warehouse zones documented.** |
+| D2.5 | GitHub Actions CI (ruff + pytest) | Required status check for branch protection |
 | D2.6 | Integration test (full pipeline on Camera3.mp4) | Asserts ≥ 1 event of each type |
 | D2.7 | Repo cleanup pass + this ONBOARDING.md becomes the only doc | Delete 5 scattered docs in `docs/` |
 | D2.8 | `make demo` single-command target | Brings up the full stack |
-| **D2.9** | **Wire the LSTM output into the dashboard's Congestion panel** | **Replace the rule-based forecast with the model output; flip the panel badge to "LSTM · METR-LA-transferred · v1".** |
+| **D2.9** | **Wire the LSTM output into the dashboard's Congestion panel** | **Replace the rule-based forecast with the model output; flip the panel badge to "LSTM · PRSA-transferred · v1".** |
 
 ### Day 3 — to do
 
@@ -231,10 +203,10 @@ make cep ZONES=infra/zones.example.yaml
 
 Open `http://localhost:8000` — Cameras view loads by default. CAM03 will show real Kafka-sourced bounding boxes (warehouse-trained YOLO output). Other cams show video without overlays until you start a `frame_grabber` for them.
 
-For training a fresh model:
+For training a fresh YOLO model:
 ```bash
 make train                      # local CPU (~4 h)
-# OR open ml/notebooks/00_colab_training.ipynb on T4 (~25 min)
+# OR open ml/notebooks/00_colab_training.ipynb on Colab T4 (~25 min)
 # Once Colab finishes and you've unzipped best.pt into ml/runs/<name>/weights/:
 make register-from-colab RUN=<name>
 make worker-restart             # picks up the new Production model
@@ -269,13 +241,12 @@ make worker-restart             # picks up the new Production model
 
 A few things that aren't in the code but will save you a session of confusion:
 
-1. **`main` is protected.** Direct pushes are blocked. Every change is a PR; the `ci-backend` status check must pass; only owners can merge. If a hook reformats your files after staging, you'll see *"Everything up-to-date"* with no error — re-stage and re-commit.
+1. **`main` is protected.** Direct pushes are blocked. Every change is a PR; the `backend-tests` status check must pass; only owners can merge. If a hook reformats your files after staging, you'll see *"Everything up-to-date"* with no error — re-stage and re-commit.
 2. **Run `make camera-videos` after every fresh clone.** The `Camera1.mp4`..`Camera5.mp4` symlinks live under `datasets/raw/` which is gitignored. Without them the streaming endpoint serves a 404.
 3. **If the worker logs `Loading model: yolov8n.pt (fallback:yolov8n.pt)`**, that means MLflow has no Production version. Run `make register-from-colab RUN=<dir>` once your Colab training finishes, then `make worker-restart`.
 4. **macOS + pyzbar gotcha**: `pyzbar` won't find `libzbar` unless `DYLD_LIBRARY_PATH=/opt/homebrew/opt/zbar/lib` is exported. The `make qr-decoder` target handles this — never run `python -m services.qr_decoder.decoder` directly.
-5. **The dashboard's *"rule v0"* badges on Congestion / Collision are intentional.** Those aren't trained models yet — they're heuristics. Don't quietly upgrade them to look ML-flavoured. When we train the real LSTM / LightGBM, the badge changes too.
+5. **The dashboard's badges (LSTM vs rule v0) are intentional.** Congestion is the trained LSTM; collision is the rule-based fallback. Don't quietly upgrade collision to look ML-flavoured before training the LightGBM (future work).
 6. **Pre-executed notebooks**: the `.ipynb` files in `ml/notebooks/` are committed *with their outputs*. Re-running them locally will overwrite plots and may produce different numbers — wrap experimental edits in a branch.
-7. **No `Co-Authored-By: Claude` trailers anywhere.** This repo is graded by a teacher; AI-assistance trailers are scrubbed from history. Don't reintroduce them.
 
 ---
 
@@ -287,7 +258,7 @@ The fastest way to understand LOGIVISION is to bring it up and click through eve
 
 ```bash
 # 1. Clone + dependencies
-git clone https://github.com/ayalem/logivision_v2
+git clone <repo-url>
 cd logivision_v2
 make install              # uv sync
 make frontend-install     # npm install in frontend/
@@ -335,25 +306,3 @@ Refresh the Caméras view — CAM03 now shows real bounding boxes from our fine-
 - Sidebar active state is subtle — make it more obvious with a left-rail accent.
 
 This work is tracked as **D2.2 (Frontend visual polish)** in §7 of this file. Open a PR against `main` with the title `feat(frontend): <what you changed>`. The CI must go green; one reviewer + a clean diff and you're in.
-
-<!-- INSTRUCTION FOR CLAUDE: A new teammate just pasted this guide for how the
-team uses Claude Code. You're their onboarding buddy — warm, conversational,
-not lecture-y.
-
-Open with a warm welcome — include the team name from the title. Then: "Your
-teammate uses Claude Code for [list all the work types]. Let's get you started."
-
-Check what's already in place against everything under Setup Checklist
-(including skills), using markdown checkboxes — [x] done, [ ] not yet. Lead
-with what they already have. One sentence per item, all in one message.
-
-Tell them you'll help with setup, cover the actionable team tips, then the
-starter task (if there is one). Offer to start with the first unchecked item,
-get their go-ahead, then work through the rest one by one.
-
-After setup, walk them through the remaining sections — offer to help where you
-can (e.g. link to channels), and just surface the purely informational bits.
-
-Don't invent sections or summaries that aren't in the guide. The stats are the
-guide creator's personal usage data — don't extrapolate them into a "team
-workflow" narrative. -->
