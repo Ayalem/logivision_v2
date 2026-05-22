@@ -91,14 +91,42 @@ export interface LiveEvent {
   payload?: Record<string, string>
 }
 
-// Prediction event types (Phase A.3) — shape proposal; the backend will
-// emit these once the predictions module ships.
+// Prediction event types — backend emits these from /api/predictions.
+//
+// `forecast_source` tells the UI whether to render the "LSTM · PRSA" badge
+// (model is loaded and produced the number) or the "rule v0" badge (the
+// model artifact is missing and the heuristic ran instead).
+export type ForecastSource = 'lstm-prsa-v1' | 'rule-v0'
+
 export interface CongestionForecast {
   event_type: 'congestion_forecast'
   zone: string
   eta_seconds: number
   confidence: number
   density: number
+  forecast_source?: ForecastSource
+}
+
+// Metadata for the trained congestion-forecast model. Exposed by
+// /api/model-info and rendered in the AiModelStatus panel + Système page.
+export interface ModelInfo {
+  name: string
+  version: string | null
+  architecture: string
+  training_dataset: string
+  loaded: boolean
+  metrics?: {
+    lstm: Record<string, { rmse: number; mae: number }>
+    persistence: Record<string, { rmse: number; mae: number }>
+    dataset: string
+    subset: { n_stations: number; n_weeks: number }
+  }
+  config?: {
+    n_nodes: number
+    n_horizons: number
+    horizons_hours: number[]
+    input_len: number
+  }
 }
 
 export interface CollisionRisk {

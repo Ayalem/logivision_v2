@@ -102,6 +102,10 @@ export interface CongestionForecast {
   confidence: number
   density: number
   timestamp_ms: number
+  /** Identifies whether the trained LSTM (lstm-prsa-v1) produced this
+   * forecast or the rule-based fallback (rule-v0). The UI uses this to
+   * flip the panel badge between the green LSTM tag and the amber rule tag. */
+  forecast_source?: 'lstm-prsa-v1' | 'rule-v0'
 }
 export interface CollisionRisk {
   event_id: string
@@ -142,6 +146,15 @@ export const usePredictions = () =>
     queryKey: ['predictions'],
     queryFn: () => getJson<PredictionsResponse>('/api/predictions?n=40'),
     refetchInterval: 5_000,
+  })
+
+// Trained-model metadata for the AI MODEL STATUS panel.
+export const useModelInfo = () =>
+  useQuery<import('./types').ModelInfo>({
+    queryKey: ['model-info'],
+    queryFn: () => getJson<import('./types').ModelInfo>('/api/model-info'),
+    refetchInterval: 60_000,  // doesn't change often
+    staleTime: 30_000,
   })
 
 export interface HeatmapResponse {

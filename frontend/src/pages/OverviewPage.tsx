@@ -9,6 +9,7 @@ import { KpiStrip } from '@/components/dashboard/KpiStrip'
 import { DigitalTwin } from '@/components/digital-twin/DigitalTwin'
 import { InsightRail } from '@/components/insights/InsightChain'
 import { CongestionPanel } from '@/components/predictions/CongestionPanel'
+import { AiModelStatus } from '@/components/predictions/AiModelStatus'
 
 export function OverviewPage() {
   const { data: cams } = useCameras()
@@ -23,6 +24,7 @@ export function OverviewPage() {
           <CongestionPanel />
         </div>
         <div className="xl:col-span-1 space-y-4">
+          <AiModelStatus />
           <InsightRail />
         </div>
       </div>
