@@ -108,6 +108,13 @@ ml/runs/
 mlruns/
 mlartifacts/
 
+# Trained-model artifacts under ml/artifacts/<name>/ are committed in
+# the repo — small (<1 MB), reproducible, and they're what the
+# dashboard wires into. Pattern is an explicit allow-list per model.
+!ml/artifacts/**/model.pt
+!ml/artifacts/**/history.csv
+!ml/artifacts/**/metrics.json
+
 # --- Docker / volumes ---
 .docker/
 volumes/
