@@ -235,7 +235,16 @@ code(
 import pandas as pd
 import matplotlib.pyplot as plt
 
-run_dir = pathlib.Path('runs/colab_kaggle_50ep')
+candidates = sorted(pathlib.Path('runs').glob('**/colab_kaggle_50ep'))
+run_dir = next((p for p in candidates if (p / 'results.csv').is_file()), None)
+if run_dir is None:
+    run_dir = next((p for p in candidates if (p / 'weights' / 'best.pt').is_file()), None)
+if run_dir is None:
+    raise FileNotFoundError(
+        'No run directory containing results.csv or weights/best.pt under runs/. '
+        'Did cell 6 finish?  Candidates: ' + str(candidates)
+    )
+print('using run_dir =', run_dir)
 df = pd.read_csv(run_dir / 'results.csv')
 df.columns = [c.strip() for c in df.columns]
 
@@ -265,7 +274,16 @@ code(
 import shutil
 from datetime import datetime
 
-run_dir = pathlib.Path('runs/colab_kaggle_50ep')
+candidates = sorted(pathlib.Path('runs').glob('**/colab_kaggle_50ep'))
+run_dir = next((p for p in candidates if (p / 'results.csv').is_file()), None)
+if run_dir is None:
+    run_dir = next((p for p in candidates if (p / 'weights' / 'best.pt').is_file()), None)
+if run_dir is None:
+    raise FileNotFoundError(
+        'No run directory containing results.csv or weights/best.pt under runs/. '
+        'Did cell 6 finish?  Candidates: ' + str(candidates)
+    )
+print('using run_dir =', run_dir)
 stamp = datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')
 bundle = pathlib.Path(f'/content/logivision_colab_run_{stamp}')
 bundle.mkdir(exist_ok=True)
