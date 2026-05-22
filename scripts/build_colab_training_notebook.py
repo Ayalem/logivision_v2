@@ -175,6 +175,21 @@ code(
 #      - cos_lr=True (anneals smoothly; matches ULMFiT recipe)
 #      - patience=15 (early stop if val mAP plateaus)
 #      - device=0 (GPU 0)
+
+# Defensive: if cells 1-5 weren't run in order, recover DATA_YAML from disk.
+# This lets you re-run cell 6 alone after a restart, as long as cell 5 ran
+# at least once in the current Colab session.
+try:
+    DATA_YAML
+except NameError:
+    import pathlib
+    DATA_YAML = pathlib.Path('data/processed/kaggle_warehouse/data.yaml').resolve()
+    if not DATA_YAML.is_file():
+        raise FileNotFoundError(
+            f'{DATA_YAML} not found — please run cells 1-5 (Runtime -> Run all).'
+        )
+    print(f'(recovered DATA_YAML from disk: {DATA_YAML})')
+
 from ultralytics import YOLO
 
 model = YOLO('yolov8n.pt')                  # COCO weights as starting point
