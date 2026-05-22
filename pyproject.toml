@@ -6,6 +6,10 @@ readme = "README.md"
 requires-python = ">=3.11,<3.12"
 license = "MIT"
 authors = [{ name = "Ayalem", email = "ayalemzouri9@gmail.com" }]
+dependencies = [
+    "supervision>=0.28.0",
+    "trackers>=2.4.0",
+]
 
 [tool.uv]
 package = false

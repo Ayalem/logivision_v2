@@ -79,3 +79,86 @@ def test_detect_on_image_bytes_handles_no_detections() -> None:
     out = detect_on_image_bytes(fake_model, buf.getvalue(), conf=0.1)
     assert out == []
     fake_model.predict.assert_called_once()
+
+
+# ---------- ByteTrack integration ---------------------------------------
+
+
+def _make_det(x1: float, y1: float, x2: float, y2: float, cls: int = 0, conf: float = 0.85) -> dict:
+    return {
+        "class_id": cls,
+        "class_name": "box",
+        "confidence": conf,
+        "x1": x1,
+        "y1": y1,
+        "x2": x2,
+        "y2": y2,
+    }
+
+
+def test_apply_tracker_empty_input_returns_empty(monkeypatch) -> None:
+    """Zero detections → zero output, no tracker created."""
+    from services.inference_worker.worker import _TRACKERS, apply_tracker
+
+    monkeypatch.setattr(
+        "services.inference_worker.worker._TRACKERS", _TRACKERS.copy(), raising=True
+    )
+    assert apply_tracker([], "CAM_EMPTY") == []
+
+
+def test_apply_tracker_assigns_persistent_track_id_across_frames() -> None:
+    """A detection at almost the same position 3 frames in a row keeps the SAME track_id."""
+    from services.inference_worker.worker import _TRACKERS, apply_tracker
+
+    cam = "CAM_TRACKER_TEST"
+    _TRACKERS.pop(cam, None)  # fresh state for the test
+
+    # Three frames, same object barely moving — tracker should give one ID.
+    track_ids: list[int] = []
+    for x_off in (0, 2, 4):
+        result = apply_tracker([_make_det(100 + x_off, 100, 200 + x_off, 200, conf=0.9)], cam)
+        if result and "track_id" in result[0]:
+            track_ids.append(result[0]["track_id"])
+
+    # ByteTrack needs ≥ 2 hits to confirm a track. After 3 frames at least
+    # 2 of the rows must have the same track_id.
+    assert len(track_ids) >= 2, f"tracker dropped too many frames: {track_ids}"
+    assert track_ids[0] == track_ids[-1], f"track_id changed across frames: {track_ids}"
+
+
+def test_apply_tracker_isolates_state_per_camera() -> None:
+    """Two cameras can't share track IDs — they are independent ByteTrack instances."""
+    from services.inference_worker.worker import _TRACKERS, apply_tracker
+
+    _TRACKERS.pop("CAM_A", None)
+    _TRACKERS.pop("CAM_B", None)
+
+    # Same bbox on two different cameras 3 frames each.
+    for _ in range(3):
+        apply_tracker([_make_det(50, 50, 150, 150)], "CAM_A")
+        apply_tracker([_make_det(50, 50, 150, 150)], "CAM_B")
+
+    assert "CAM_A" in _TRACKERS
+    assert "CAM_B" in _TRACKERS
+    # Each tracker is a different object (independent state).
+    assert _TRACKERS["CAM_A"] is not _TRACKERS["CAM_B"]
+
+
+def test_apply_tracker_preserves_class_info() -> None:
+    """The tracker must not drop class_id / class_name / confidence."""
+    from services.inference_worker.worker import _TRACKERS, apply_tracker
+
+    cam = "CAM_PRESERVE"
+    _TRACKERS.pop(cam, None)
+
+    # Warm up the tracker (needs ≥ 2 frames to confirm).
+    for _ in range(3):
+        out = apply_tracker([_make_det(10, 10, 50, 50, cls=2, conf=0.91)], cam)
+
+    assert out, "no detections came back from the tracker"
+    d = out[0]
+    assert d["class_id"] == 2
+    assert d["class_name"] == "box"
+    assert d["confidence"] == 0.91
+    assert "track_id" in d
+    assert isinstance(d["track_id"], int)

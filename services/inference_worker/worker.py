@@ -81,7 +81,12 @@ def make_detection_payload(
 
 
 def detect_on_image_bytes(model: Any, image_bytes: bytes, conf: float) -> list[dict]:
-    """Run YOLO inference on raw bytes and return YOLO-shape detections."""
+    """Run YOLO inference on raw bytes and return YOLO-shape detections.
+
+    Each detection is a dict with class_id / class_name / confidence /
+    bounding-box. **No tracking here** — tracking is a separate step in
+    `apply_tracker()` so that the two concerns stay testable in isolation.
+    """
     import io
 
     import numpy as np
@@ -111,6 +116,86 @@ def detect_on_image_bytes(model: Any, image_bytes: bytes, conf: float) -> list[d
                     "y2": float(y2),
                 }
             )
+    return out
+
+
+# Per-camera ByteTrack state. Each camera_id gets its own tracker so that
+# track_ids stay locally consistent without single-camera sequences bleeding
+# into one another. Reset on worker restart (acceptable — Kafka rebalance
+# will reassign partitions and the next frames seed new tracks anyway).
+_TRACKERS: dict[str, Any] = {}
+
+
+def _get_tracker(camera_id: str):
+    """Lazy-init one `trackers.ByteTrackTracker` per camera.
+
+    The `trackers` package (Roboflow, replaces deprecated supervision.ByteTrack)
+    keeps its own internal state — we instantiate one per camera_id so a
+    forklift at camera A never collides with a forklift at camera B in
+    the ID assignment.
+    """
+    if camera_id in _TRACKERS:
+        return _TRACKERS[camera_id]
+    from trackers import ByteTrackTracker
+
+    # Defaults tuned for our 5 fps warehouse stream:
+    #   track_activation_threshold = 0.25  → match D-conf threshold
+    #   lost_track_buffer          = 30    → tolerate ~6 s of occlusion
+    #   minimum_consecutive_frames = 2     → confirm a track after 2 hits
+    #   minimum_iou_threshold      = 0.1   → loose IoU for slow-moving boxes
+    #   frame_rate                 = 5     → our nominal grabber FPS
+    _TRACKERS[camera_id] = ByteTrackTracker(
+        track_activation_threshold=0.25,
+        lost_track_buffer=30,
+        minimum_consecutive_frames=2,
+        minimum_iou_threshold=0.1,
+        frame_rate=5,
+    )
+    return _TRACKERS[camera_id]
+
+
+def apply_tracker(detections: list[dict], camera_id: str) -> list[dict]:
+    """Add a persistent integer `track_id` to each detection via ByteTrack.
+
+    Detections that ByteTrack hasn't (yet) confirmed as a track keep no
+    `track_id` key. CEP downstream uses its presence/absence to decide
+    whether to run stateful rules (stationary, fall) on that detection.
+
+    Empty input → empty output. Side effect: updates per-camera tracker
+    state in `_TRACKERS`.
+    """
+    if not detections:
+        return detections
+
+    import numpy as np
+    import supervision as sv
+
+    xyxy = np.array([[d["x1"], d["y1"], d["x2"], d["y2"]] for d in detections], dtype=np.float32)
+    conf = np.array([d["confidence"] for d in detections], dtype=np.float32)
+    cls = np.array([d["class_id"] for d in detections], dtype=int)
+
+    sv_dets = sv.Detections(xyxy=xyxy, confidence=conf, class_id=cls)
+    tracked = _get_tracker(camera_id).update(sv_dets)
+
+    # Re-match tracked rows back to our original dict objects by xyxy.
+    # Rounding to one decimal keeps a small tolerance against float drift
+    # the tracker may introduce.
+    by_xyxy: dict[tuple, dict] = {
+        tuple(round(v, 1) for v in (d["x1"], d["y1"], d["x2"], d["y2"])): d for d in detections
+    }
+    out: list[dict] = []
+    for i in range(len(tracked.xyxy)):
+        key = tuple(round(float(v), 1) for v in tracked.xyxy[i])
+        original = by_xyxy.get(key)
+        if original is None:
+            # Tracker returned a row we cannot reconcile — drop it rather
+            # than guess. Avoids assigning the wrong class to a track.
+            continue
+        clean = dict(original)
+        tid_raw = tracked.tracker_id[i] if tracked.tracker_id is not None else None
+        if tid_raw is not None and int(tid_raw) >= 0:
+            clean["track_id"] = int(tid_raw)
+        out.append(clean)
     return out
 
 
@@ -178,6 +263,10 @@ def run(config: WorkerConfig, stop_after: int | None = None) -> int:
                 image_bytes = fetch_frame_bytes(s3, raw["frame_uri"])
                 started = time.perf_counter()
                 detections = detect_on_image_bytes(model, image_bytes, config.detection_conf)
+                # ByteTrack step: detections gain a persistent `track_id`.
+                # Done after detection so the function stays single-purpose
+                # and the tracker can be unit-tested without a model.
+                detections = apply_tracker(detections, raw.get("camera_id", "UNKNOWN"))
                 payload = make_detection_payload(
                     raw, detections, model_version, (time.perf_counter() - started) * 1000.0
                 )
