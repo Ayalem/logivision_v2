@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean camera-videos qr-decoder
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean camera-videos qr-decoder register-from-colab worker-restart
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -192,3 +192,16 @@ camera-videos: ## Create Camera1.mp4..Camera5.mp4 symlinks in datasets/raw/video
 qr-decoder: ## Run the QR/barcode decoder service against Kafka (macOS: needs brew install zbar)
 	DYLD_LIBRARY_PATH=/opt/homebrew/opt/zbar/lib:$$DYLD_LIBRARY_PATH \
 		$(UV) run python -m services.qr_decoder.decoder
+
+register-from-colab: ## Register a Colab-trained best.pt as a new MLflow model version. Usage: make register-from-colab RUN=<run_dir>
+	@test -n "$$RUN" || { echo "Usage: make register-from-colab RUN=<run_dir>" >&2; exit 1; }
+	@test -f "ml/runs/$$RUN/weights/best.pt" || { \
+		echo "ERROR: ml/runs/$$RUN/weights/best.pt missing." >&2; \
+		echo "Drop the Colab download zip there first." >&2; exit 1; }
+	$(UV) run python -c "from services.model_server.service import register_from_local; \
+		print(register_from_local('ml/runs/$$RUN/weights/best.pt', stage='Production'))"
+
+worker-restart: ## Kill any running inference-worker and start a fresh one (picks up the latest Production model from MLflow)
+	@pkill -f 'services.inference_worker.worker' 2>/dev/null || true
+	@sleep 1
+	$(UV) run python -m services.inference_worker.worker &

@@ -95,10 +95,29 @@ def resolve_model_weights(
     mv = candidates[0]
     work = Path(download_dir or tempfile.mkdtemp(prefix="logivision-model-"))
     work.mkdir(parents=True, exist_ok=True)
-    try:
-        local_root = client.download_artifacts(run_id=mv.run_id, path="model", dst_path=str(work))
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Could not download model/ for run %s (%s); fallback.", mv.run_id, exc)
+
+    # Ultralytics runs write weights at `weights/best.pt`, not at the
+    # `model/` path that mlflow.pyfunc.log_model would have created.
+    # Try the well-known paths in order; first match wins.
+    candidate_paths = ("weights", "model", "")
+    local_root: str | None = None
+    for sub in candidate_paths:
+        try:
+            local_root = client.download_artifacts(run_id=mv.run_id, path=sub, dst_path=str(work))
+            if next(Path(local_root).rglob("best.pt"), None):
+                break  # found a .pt at this subpath
+            local_root = None
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("artifact path %r missing for run %s: %s", sub, mv.run_id, exc)
+            continue
+
+    if local_root is None:
+        logger.warning(
+            "No best.pt found under any of %s for run %s; using fallback %s",
+            list(candidate_paths),
+            mv.run_id,
+            fallback,
+        )
         return fallback, f"fallback:{fallback}"
 
     pt = next(Path(local_root).rglob("best.pt"), None)
@@ -107,6 +126,59 @@ def resolve_model_weights(
         return fallback, f"fallback:{fallback}"
 
     return str(pt), f"{model_name}/v{mv.version}/{stage}"
+
+
+def register_from_local(
+    weights_path: str | Path,
+    model_name: str = DEFAULT_MODEL_NAME,
+    tracking_uri: str = DEFAULT_TRACKING_URI,
+    metrics: dict[str, float] | None = None,
+    tags: dict[str, str] | None = None,
+    stage: str | None = None,
+) -> str:
+    """Register a local best.pt as a new version of `logivision-detector`.
+
+    Used by the Colab → local workflow: the user trains on a T4, downloads
+    a bundle containing `best.pt` + `results.csv`, drops the .pt into
+    `ml/runs/<colab_run>/weights/`, and calls this function (or
+    `make register-from-colab RUN=<dirname>`).
+
+    Creates one MLflow run (Status=FINISHED) and one Registry version with
+    the artifact at `weights/best.pt` — the same layout the Production
+    `resolve_model_weights` looks for. Returns the new version label.
+    """
+    import mlflow
+
+    p = Path(weights_path).resolve()
+    if not p.is_file():
+        raise FileNotFoundError(f"weights file not found: {p}")
+
+    mlflow.set_tracking_uri(tracking_uri)
+    mlflow.set_experiment("warehouse-detection")
+    with mlflow.start_run(run_name=f"register_from_local::{p.parent.parent.name}") as run:
+        mlflow.set_tags({"source": "register_from_local", "weights_path": str(p), **(tags or {})})
+        if metrics:
+            mlflow.log_metrics(metrics)
+        # Stage the .pt under the canonical `weights/` artifact path so the
+        # later resolve_model_weights() call finds it without changes.
+        mlflow.log_artifact(str(p), artifact_path="weights")
+
+        # Register it as a new version of the canonical model.
+        from mlflow.tracking import MlflowClient
+
+        client = MlflowClient(tracking_uri=tracking_uri)
+        try:
+            client.get_registered_model(model_name)
+        except mlflow.exceptions.RestException:
+            client.create_registered_model(model_name)
+        mv = client.create_model_version(
+            name=model_name,
+            source=f"runs:/{run.info.run_id}/weights",
+            run_id=run.info.run_id,
+        )
+        if stage and stage != "None":
+            client.transition_model_version_stage(name=model_name, version=mv.version, stage=stage)
+        return f"{model_name}/v{mv.version}/{stage or mv.current_stage}"
 
 
 @bentoml.service(
