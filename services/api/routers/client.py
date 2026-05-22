@@ -516,15 +516,42 @@ def _predict_from_events(events: list[dict], now_ms: int) -> dict[str, list[dict
             with contextlib.suppress(TypeError, ValueError):
                 by_track[tid].append({"t": ts, "x": float(cx), "y": float(cy)})
 
+    # Try the trained LSTM first; fall back to rule when the model
+    # isn't loaded (artifact missing, PyTorch unavailable, etc).
+    from services.api._lstm_inference import (
+        SOURCE_LSTM,
+        SOURCE_RULE,
+        forecast_zone_occupancy,
+    )
+
     congestion: list[dict] = []
     for zone, evts in by_zone.items():
         if len(evts) < CONGESTION_THRESHOLD:
             continue
-        # ETA shrinks as more stationary events stack up.
-        eta = max(30, 240 - len(evts) * 30)
-        confidence = min(0.95, 0.55 + 0.1 * len(evts))
-        density = min(1.0, len(evts) / 10.0)
         latest_ts = max(int(e.get("timestamp_ms", 0)) for e in evts)
+
+        lstm_out = forecast_zone_occupancy(events, zone, now_ms)
+        if lstm_out is not None:
+            # Newest horizon = first element of forecast (sorted ascending).
+            # forecast values are z-scored; squashing through a sigmoid
+            # gives a 0-1 density estimate the UI can render directly.
+            import math
+
+            short_horizon = float(lstm_out["forecast"][0])
+            density = 1.0 / (1.0 + math.exp(-short_horizon))
+            # ETA shrinks with predicted occupancy. Floor at 30 s.
+            eta = max(30, int(240 * (1 - density)))
+            # Confidence proxy = inverse of held-out MAE (later: load from
+            # metrics.json). Hard-coded conservative 0.75 for v1.
+            confidence = 0.75
+            source = SOURCE_LSTM
+        else:
+            # Rule fallback.
+            eta = max(30, 240 - len(evts) * 30)
+            confidence = min(0.95, 0.55 + 0.1 * len(evts))
+            density = min(1.0, len(evts) / 10.0)
+            source = SOURCE_RULE
+
         congestion.append(
             {
                 "event_id": f"cgf-{zone}-{latest_ts}",
@@ -535,6 +562,7 @@ def _predict_from_events(events: list[dict], now_ms: int) -> dict[str, list[dict
                 "confidence": round(confidence, 2),
                 "density": round(density, 2),
                 "timestamp_ms": latest_ts,
+                "forecast_source": source,
             }
         )
 
@@ -616,6 +644,18 @@ def _predict_from_events(events: list[dict], now_ms: int) -> dict[str, list[dict
         )
 
     return {"congestion": congestion, "collision": collision, "trajectories": trajectories}
+
+
+@router.get("/model-info")
+def get_model_info() -> dict:
+    """Exposed metadata for the trained congestion-forecast model.
+
+    Drives the dashboard's "trained model" badge in the Système panel:
+    name, version, held-out test metrics (RMSE / MAE), dataset.
+    """
+    from services.api._lstm_inference import model_info
+
+    return model_info()
 
 
 @router.get("/predictions")
