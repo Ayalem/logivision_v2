@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean camera-videos qr-decoder
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -181,3 +181,14 @@ frontend-build: ## Produce a production build at frontend/dist/ (served by FastA
 
 frontend-clean: ## Wipe frontend/dist and frontend/node_modules (irreversible)
 	rm -rf frontend/dist frontend/node_modules
+
+# ---------------------------------------------------------------------------
+# Camera videos + QR decoder
+# ---------------------------------------------------------------------------
+
+camera-videos: ## Create Camera1.mp4..Camera5.mp4 symlinks in datasets/raw/videos/
+	$(UV) run python scripts/setup_camera_videos.py
+
+qr-decoder: ## Run the QR/barcode decoder service against Kafka (macOS: needs brew install zbar)
+	DYLD_LIBRARY_PATH=/opt/homebrew/opt/zbar/lib:$$DYLD_LIBRARY_PATH \
+		$(UV) run python -m services.qr_decoder.decoder
