@@ -51,6 +51,11 @@ logger = logging.getLogger(__name__)
 class TrackPoint:
     timestamp_ms: int
     centroid: tuple[float, float]
+    # bbox dimensions captured at this frame — needed for the box-falling
+    # rule which compares aspect-ratio over time (a box that "tips" goes
+    # from tall-and-narrow to flat-and-wide in <1 s).
+    width: float = 0.0
+    height: float = 0.0
 
 
 @dataclass
@@ -58,6 +63,9 @@ class TrackState:
     points: deque[TrackPoint] = field(default_factory=lambda: deque(maxlen=2000))
     stationary_event_emitted_ms: int = 0
     last_zone: str | None = None
+    # Cooldown for falling events so a single fall doesn't spam the topic
+    # across the 1-second window we evaluate it on.
+    falling_event_emitted_ms: int = 0
 
 
 # Allowed values for Zone.kind. `forbidden` keeps the legacy behaviour
@@ -85,6 +93,14 @@ class CEPConfig:
     stationary_radius_px: float = 25.0
     # Re-emit cooldown so we don't spam the same stationary alert.
     stationary_cooldown_s: float = 60.0
+    # ── Falling-box rule (T1.D) ─────────────────────────────────────────
+    # A box "tips over" within ~0.5 s: its aspect-ratio (h/w) flips from
+    # >1 to <1 AND its centroid_y jumps downward. We evaluate this on a
+    # 1-s sliding window per track.
+    falling_window_s: float = 1.0
+    falling_aspect_delta_min: float = 0.6  # |Δ(h/w)| must exceed this
+    falling_centroid_y_delta_min: float = 0.10  # normalised (frame %)
+    falling_cooldown_s: float = 10.0
 
 
 def _centroid(detection: dict) -> tuple[float, float]:
@@ -179,6 +195,59 @@ def evaluate_stationary(
     return (now_ms - state.stationary_event_emitted_ms) >= config.stationary_cooldown_s * 1000
 
 
+def evaluate_falling(
+    state: TrackState,
+    now_ms: int,
+    config: CEPConfig,
+    frame_height: int = 1,
+) -> bool:
+    """Decide whether to emit a `box_falling` event for this track.
+
+    Signature of a fall (the rule we ship in v0; ML upgrade documented as
+    future work):
+
+        1. Within a 1-second sliding window we have ≥ 2 trackpoints with
+           non-zero width and height.
+        2. The aspect ratio (height / width) **flips** by at least
+           `falling_aspect_delta_min` (default 0.6). Tall-and-narrow → flat-
+           and-wide is the classic tipping pattern.
+        3. The centroid moves **downward** in absolute terms by at least
+           `falling_centroid_y_delta_min` of the frame height (default 10 %).
+        4. Cooldown `falling_cooldown_s` (10 s) prevents re-firing on the
+           continuation of the same fall.
+
+    All three signals together — anything weaker triggers too many false
+    positives on slow shape-changes (a forklift turning) or pure drops
+    (a box on a conveyor going down a chute).
+    """
+    window_start = now_ms - int(config.falling_window_s * 1000)
+    pts = [p for p in state.points if p.timestamp_ms >= window_start]
+    pts = [p for p in pts if p.width > 0 and p.height > 0]
+    if len(pts) < 2:
+        return False
+
+    # Aspect ratio = height / width. A tall standing box has h/w > 1;
+    # after tipping flat-side-up, h/w < 1. We compare the OLDEST and
+    # NEWEST point in the window — using only the extremes makes the
+    # threshold meaningful regardless of how many intermediate frames
+    # the worker produced.
+    oldest, newest = pts[0], pts[-1]
+    ar_old = oldest.height / max(1e-6, oldest.width)
+    ar_new = newest.height / max(1e-6, newest.width)
+    if abs(ar_new - ar_old) < config.falling_aspect_delta_min:
+        return False
+
+    # Frame-relative vertical drop. Positive Δy = downward in image coords.
+    centroid_dy = (newest.centroid[1] - oldest.centroid[1]) / max(1, frame_height)
+    if centroid_dy < config.falling_centroid_y_delta_min:
+        return False
+
+    # Cooldown
+    if state.falling_event_emitted_ms == 0:
+        return True
+    return (now_ms - state.falling_event_emitted_ms) >= config.falling_cooldown_s * 1000
+
+
 def evaluate_zone_violation(
     detection: dict,
     image_w: int,
@@ -247,9 +316,25 @@ def process_one(
     image_h = max((int(d.get("y2", 0)) for d in detection_message.get("detections", [])), default=1)
 
     for detection in detection_message.get("detections", []):
-        track_id = _approximate_track_id(camera_id, detection)
+        # Prefer the real ByteTrack track_id from the worker (integer);
+        # fall back to the legacy hash-quantised string for older payloads.
+        real_tid = detection.get("track_id")
+        track_id = (
+            f"{camera_id}:{int(real_tid)}"
+            if isinstance(real_tid, int)
+            else _approximate_track_id(camera_id, detection)
+        )
         state = states.setdefault(track_id, TrackState())
-        state.points.append(TrackPoint(timestamp_ms=timestamp_ms, centroid=_centroid(detection)))
+        bbox_w = max(0.0, float(detection.get("x2", 0)) - float(detection.get("x1", 0)))
+        bbox_h = max(0.0, float(detection.get("y2", 0)) - float(detection.get("y1", 0)))
+        state.points.append(
+            TrackPoint(
+                timestamp_ms=timestamp_ms,
+                centroid=_centroid(detection),
+                width=bbox_w,
+                height=bbox_h,
+            )
+        )
 
         if evaluate_stationary(track_id, state, timestamp_ms, config):
             state.stationary_event_emitted_ms = timestamp_ms
@@ -264,6 +349,30 @@ def process_one(
                         "centroid_x": str(state.points[-1].centroid[0]),
                         "centroid_y": str(state.points[-1].centroid[1]),
                         "window_seconds": str(config.stationary_window_s),
+                    },
+                    timestamp_ms=timestamp_ms,
+                )
+            )
+
+        # Box-falling — a tipping carton flips its aspect ratio AND drops.
+        # We can only evaluate this when the bbox dims are non-zero, which
+        # is always the case for real worker output but may be skipped in
+        # synthetic test payloads.
+        if bbox_w > 0 and bbox_h > 0 and evaluate_falling(state, timestamp_ms, config, image_h):
+            state.falling_event_emitted_ms = timestamp_ms
+            ar_now = bbox_h / max(1e-6, bbox_w)
+            emitted.append(
+                make_event(
+                    event_type="box_falling",
+                    severity="critical",
+                    camera_id=camera_id,
+                    track_id=track_id,
+                    payload={
+                        "class_name": detection.get("class_name", ""),
+                        "centroid_x": f"{state.points[-1].centroid[0]:.3f}",
+                        "centroid_y": f"{state.points[-1].centroid[1]:.3f}",
+                        "aspect_ratio_now": f"{ar_now:.3f}",
+                        "window_seconds": str(config.falling_window_s),
                     },
                     timestamp_ms=timestamp_ms,
                 )

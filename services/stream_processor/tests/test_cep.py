@@ -17,6 +17,7 @@ from services.stream_processor.cep import (
     _is_stationary,
     _load_zones,
     _point_in_polygon,
+    evaluate_falling,
     evaluate_stationary,
     evaluate_zone_membership,
     evaluate_zone_violation,
@@ -351,3 +352,137 @@ def test_process_one_shelf_kind_emits_no_event() -> None:
     events = process_one(msg, states, zones, cfg)
     # No CEP event types are emitted for shelf zones.
     assert all(e["event_type"] not in {"entry", "exit", "zone_violation"} for e in events)
+
+
+# ─────────── Box-falling rule (T1.D) ───────────────────────────────────────
+
+
+def test_evaluate_falling_needs_two_points_with_bbox() -> None:
+    cfg = CEPConfig()
+    state = TrackState()
+    # Only one point → not enough data
+    state.points.append(TrackPoint(timestamp_ms=1000, centroid=(100, 100), width=20, height=40))
+    assert not evaluate_falling(state, now_ms=1500, config=cfg, frame_height=480)
+
+
+def test_evaluate_falling_returns_true_on_classic_tip_pattern() -> None:
+    """A tall box at t=0 becomes a flat box at t=900ms with a downward jump."""
+    cfg = CEPConfig()
+    state = TrackState()
+    # t=0: tall standing box (height/width = 3.0) at upper part of frame
+    state.points.append(TrackPoint(timestamp_ms=0, centroid=(100, 100), width=20, height=60))
+    # t=900ms: same object now flat (height/width = 0.4) and 80px lower
+    state.points.append(TrackPoint(timestamp_ms=900, centroid=(102, 180), width=50, height=20))
+    # Δ aspect: |0.4 - 3.0| = 2.6 ≥ 0.6 ✓
+    # Δy normalised: 80/480 = 0.166 ≥ 0.10 ✓
+    assert evaluate_falling(state, now_ms=900, config=cfg, frame_height=480) is True
+
+
+def test_evaluate_falling_false_when_box_only_slides_horizontally() -> None:
+    """A box moving sideways with no aspect change is not falling."""
+    cfg = CEPConfig()
+    state = TrackState()
+    state.points.append(TrackPoint(timestamp_ms=0, centroid=(50, 100), width=30, height=60))
+    state.points.append(TrackPoint(timestamp_ms=500, centroid=(150, 100), width=30, height=60))
+    assert not evaluate_falling(state, now_ms=500, config=cfg, frame_height=480)
+
+
+def test_evaluate_falling_false_when_box_only_drops_without_tipping() -> None:
+    """A box on a conveyor going down (centroid Δy ↑) but keeping its
+    shape: aspect ratio is unchanged so this is not a fall."""
+    cfg = CEPConfig()
+    state = TrackState()
+    state.points.append(TrackPoint(timestamp_ms=0, centroid=(100, 100), width=30, height=60))
+    state.points.append(TrackPoint(timestamp_ms=500, centroid=(100, 300), width=30, height=60))
+    # Δy = 200/480 = 0.41 ≥ 0.10 BUT Δ aspect = 0
+    assert not evaluate_falling(state, now_ms=500, config=cfg, frame_height=480)
+
+
+def test_evaluate_falling_cooldown_suppresses_repeated_event() -> None:
+    """Once a fall has been emitted, the rule stays silent until the
+    cooldown expires."""
+    cfg = CEPConfig(falling_cooldown_s=10)
+    state = TrackState()
+    state.points.append(TrackPoint(timestamp_ms=0, centroid=(100, 100), width=20, height=60))
+    state.points.append(TrackPoint(timestamp_ms=900, centroid=(102, 200), width=50, height=20))
+    assert evaluate_falling(state, now_ms=900, config=cfg, frame_height=480) is True
+    state.falling_event_emitted_ms = 900
+    # 2 s later, same pattern → still in cooldown
+    state.points.append(TrackPoint(timestamp_ms=2900, centroid=(105, 300), width=55, height=18))
+    assert not evaluate_falling(state, now_ms=2900, config=cfg, frame_height=480)
+
+
+def test_process_one_emits_box_falling_critical_event() -> None:
+    """End-to-end: a frame containing a clear tipping pattern produces
+    a `box_falling` event with severity=critical."""
+    cfg = CEPConfig()
+    states: dict = defaultdict(TrackState)
+    # Frame 1: a tall standing box
+    msg1 = {
+        "camera_id": "CAM_FALL",
+        "timestamp_ms": 0,
+        "detections": [
+            {
+                "x1": 100,
+                "y1": 80,
+                "x2": 120,
+                "y2": 140,
+                "class_id": 0,
+                "class_name": "box",
+                "confidence": 0.92,
+                "track_id": 7,
+            }
+        ],
+    }
+    # Frame 2 (900 ms later): flat, dropped 80px down
+    msg2 = {
+        "camera_id": "CAM_FALL",
+        "timestamp_ms": 900,
+        "detections": [
+            {
+                "x1": 80,
+                "y1": 180,
+                "x2": 130,
+                "y2": 200,
+                "class_id": 0,
+                "class_name": "box",
+                "confidence": 0.91,
+                "track_id": 7,
+            }
+        ],
+    }
+    process_one(msg1, states, zones=[], config=cfg)
+    events = process_one(msg2, states, zones=[], config=cfg)
+
+    falling = [e for e in events if e["event_type"] == "box_falling"]
+    assert (
+        len(falling) == 1
+    ), f"expected 1 fall event, got events: {[e['event_type'] for e in events]}"
+    assert falling[0]["severity"] == "critical"
+    assert falling[0]["track_id"] == "CAM_FALL:7"
+    assert "aspect_ratio_now" in falling[0]["payload"]
+
+
+def test_process_one_does_not_emit_fall_for_static_objects() -> None:
+    """A stationary object across many frames must NOT trigger a fall."""
+    cfg = CEPConfig()
+    states: dict = defaultdict(TrackState)
+    for ts in (0, 200, 400, 600, 800, 1000):
+        msg = {
+            "camera_id": "CAM_QUIET",
+            "timestamp_ms": ts,
+            "detections": [
+                {
+                    "x1": 100,
+                    "y1": 100,
+                    "x2": 130,
+                    "y2": 160,
+                    "class_id": 0,
+                    "class_name": "box",
+                    "confidence": 0.9,
+                    "track_id": 11,
+                }
+            ],
+        }
+        events = process_one(msg, states, zones=[], config=cfg)
+        assert not any(e["event_type"] == "box_falling" for e in events)
