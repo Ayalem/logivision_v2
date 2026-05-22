@@ -1,0 +1,75 @@
+name: CI — Backend
+
+# Runs lint + tests for every Python service except the Flink jobs
+# (those have their own ci-flink.yml workflow). The job name
+# `backend-tests` is the status check required by branch protection
+# on `main` — keep it stable.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+      - "services/inference_worker/**"
+      - "services/frame_grabber/**"
+      - "services/qr_decoder/**"
+      - "services/stream_processor/**"
+      - "services/model_server/**"
+      - "ml/scripts/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ci-backend.yml"
+  pull_request:
+    paths:
+      - "services/api/**"
+      - "services/inference_worker/**"
+      - "services/frame_grabber/**"
+      - "services/qr_decoder/**"
+      - "services/stream_processor/**"
+      - "services/model_server/**"
+      - "ml/scripts/**"
+      - "scripts/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ci-backend.yml"
+
+jobs:
+  backend-tests:
+    name: backend-tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Native libzbar is required by the qr_decoder service's pyzbar
+      # import. apt provides libzbar0 on ubuntu-latest.
+      - name: Install system deps (libzbar for pyzbar)
+        run: sudo apt-get update && sudo apt-get install -y libzbar0
+
+      - name: Install Python dependencies
+        run: uv sync --all-groups
+
+      - name: Lint (ruff check)
+        run: uv run ruff check .
+
+      - name: Lint (ruff format check)
+        run: uv run ruff format --check .
+
+      - name: Run pytest
+        run: uv run pytest -q
+
+      - name: Show coverage hint
+        if: always()
+        run: |
+          echo "::notice::Backend tests complete. Branch protection on main"
+          echo "::notice::requires this 'backend-tests' status check before merge."
