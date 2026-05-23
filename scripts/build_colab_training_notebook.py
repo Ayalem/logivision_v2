@@ -81,9 +81,21 @@ if IN_COLAB:
     os.chdir('logivision_v2')
     print('cwd:', pathlib.Path.cwd())
 
-# Sanity: confirm we can see the dataset prep script we'll reuse.
+# Critical: put the repo root + scripts/ on sys.path so `import services.*`
+# and `import prepare_kaggle_warehouse` resolve to the cloned files.
+# Without this Python only searches site-packages — `pip install services`
+# would install an UNRELATED PyPI package; do not do that.
+REPO = pathlib.Path.cwd().resolve()
+for p in (str(REPO), str(REPO / 'scripts')):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+print('sys.path[0:3] =', sys.path[:3])
+
+# Sanity: confirm we can see the dataset prep script + the services pkg.
 assert pathlib.Path('scripts/prepare_kaggle_warehouse.py').is_file(), \\
     'prepare_kaggle_warehouse.py missing - did the repo clone correctly?'
+assert pathlib.Path('services/model_server/service.py').is_file(), \\
+    'services/model_server/service.py missing - your clone is stale; re-run git clone'
 
 # GPU check
 import torch

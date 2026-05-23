@@ -97,14 +97,28 @@ except ImportError:
 
 # Cell 2 — clone repo + install deps
 code(
-    """# 2. Clone the LOGIVISION repo and install training deps. Uses HTTPS so no SSH key needed.
-import pathlib, os
+    """# 2. Clone the LOGIVISION repo, set sys.path, install training deps.
+import pathlib, os, sys
 REPO_URL  = 'https://github.com/Ayalem/logivision_v2'
 REPO_DIR  = pathlib.Path('/content/logivision_v2')
 if not REPO_DIR.is_dir():
     !git clone --depth 1 {REPO_URL} {REPO_DIR}
 os.chdir(REPO_DIR)
 print('cwd:', os.getcwd())
+
+# Add the repo root + scripts/ to sys.path so `import services.*` and
+# `import prepare_kaggle_warehouse` resolve to the cloned files. Without
+# this Python only searches site-packages — `pip install services` would
+# pull an unrelated PyPI package, NOT our local module. Do not do that.
+for p in (str(REPO_DIR), str(REPO_DIR / 'scripts')):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+print('sys.path[0:3] =', sys.path[:3])
+
+# Sanity: confirm the services pkg cloned correctly.
+assert (REPO_DIR / 'services' / 'model_server' / 'service.py').is_file(), (
+    'services/model_server/service.py missing — clone is stale; re-run git clone'
+)
 
 %pip install -q ultralytics==8.3.0 kagglehub==0.3.0 pyyaml==6.0.1
 print('deps installed')
