@@ -1,193 +1,221 @@
-# LOGIVISION notebooks — how to run each, what each produces
+# LOGIVISION notebooks — every one is wired into Production
 
-Six notebooks form the full ML story for the project. They are
-**pre-executable on Colab T4 (free)** for the YOLO ones and **local
-CPU (3-5 min)** for the LSTM one. The flow goes from raw data →
-labelling → training → fine-tuning → inference → time-series
-forecasting → wired into the dashboard.
+No pedagogical-only notebooks. Each notebook here produces an
+**artifact that the running system actually consumes**. The
+production chain:
 
 ```
-00 ─→ Colab YOLO training        (sets the baseline)
-01 ─→ Local CPU YOLO training    (without GPU, slower)
-02 ─→ Transfer-learning walk-through (pedagogical; understanding)
-03 ─→ Inference demo + SAM       (visual proof on Camera3.mp4)
-05 ─→ Congestion LSTM (UCI PRSA) (the trained predictive model)
-06 ─→ 2-Phase ULMFiT fine-tune   (the production fine-tune recipe)
+v0 (COCO yolov8n.pt)                 # cold start
+  ↓                                   notebook 00
+v1 (Kaggle-fine-tuned)               # initial Production YOLO
+  ↓                                   notebook 06 (2-Phase ULMFiT)
+v2 (frozen→unfreeze fine-tune)       # better Production YOLO
+  ↓                                   notebook 07 (Noisy Student)
+v3 (teacher→pseudo-labels→student)   # continual improvement loop
+  ↓                                   re-run weekly as new footage arrives
+v4, v5, … (each iteration)
 ```
 
-(There is no notebook 04 — it was reserved for the accuracy-evaluation
-notebook which is still in the Day-2 plan.)
+Plus:
+- **notebook 04** — accuracy evaluation on hand-labelled ground truth.
+  The **gating criterion** before promoting any new version.
+- **notebook 05** — congestion LSTM. Produces the `model.pt` the
+  dashboard's Congestion panel loads at startup.
+
+```
+00 ─→ initial YOLO training         (Colab T4 ~25 min)     produces v1
+03 ─→ inference + SAM demo          (verification visual)   for soutenance
+04 ─→ evaluation on hand-labels     (TODO Day 2)            gating criterion
+05 ─→ congestion LSTM (UCI PRSA)    (~5 min CPU)            ml/artifacts/congestion_lstm/
+06 ─→ 2-Phase ULMFiT fine-tune      (Colab T4 ~30 min)     produces v2
+07 ─→ Noisy Student teacher→student (Colab T4 ~45 min)     produces v3, v4, …
+```
 
 ---
 
-## How to run each
+## What each one is for
 
-### 00 — Train YOLOv8 on Colab (T4 GPU)
+### 00 — Initial YOLO training (Colab T4)
 
-**What it does**: fine-tunes COCO-pretrained YOLOv8n on the Kaggle
-`warehouse-delivery-box` dataset (361 train / 99 val / 61 test), 50
-epochs, batch 32, imgsz 640. Reports mAP@0.5 / mAP@0.5:0.95 / per-class
-P/R on the held-out test split.
+**Production artifact**: `runs/detect/colab_kaggle_50ep/weights/best.pt`
+→ registered as `logivision-detector/v1/Production`.
+
+**Used by**: `services/inference_worker/worker.py` loads this via
+`services/model_server/service.py::resolve_model_weights()`.
 
 **How**:
-1. Open https://colab.research.google.com → **File → Open notebook → GitHub
-   tab** → paste `Ayalem/logivision_v2` → pick
-   `ml/notebooks/00_colab_training.ipynb`.
-2. **Runtime → Change runtime type → T4 GPU**.
-3. **Secrets** (left rail key icon): add `KAGGLE_USERNAME` + `KAGGLE_KEY`
-   from your Kaggle account API token.
-4. **Runtime → Run all** (~25 min).
-5. Last cell triggers a download of
-   `logivision_colab_run_<timestamp>.zip` with `best.pt`,
-   `results.csv`, confusion matrices.
-6. Locally:
+1. Colab → File → Open notebook → GitHub → `Ayalem/logivision_v2`
+   → `ml/notebooks/00_colab_training.ipynb`.
+2. Runtime → T4 GPU. Add `KAGGLE_USERNAME` + `KAGGLE_KEY` as Colab
+   Secrets.
+3. Runtime → Run all (~25 min).
+4. Locally:
    ```
    unzip ~/Downloads/logivision_colab_run_*.zip -d ml/runs/00_colab/
    make register-from-colab RUN=00_colab
    make worker-restart
    ```
 
-**Output**: `runs/detect/colab_kaggle_50ep/weights/best.pt`.
 **Current best**: mAP@0.5 = **0.995** on the local 50-epoch run.
 
-### 01 — YOLOv8 Detection Training (local CPU)
+### 03 — Inference demo + SAM (verification)
 
-**What it does**: same training task as `00`, but **without GPU**. Use
-when you don't want to depend on Colab. ~4 hours on an M-series Mac.
+**Production artifact**: none — this is the visual proof for the
+soutenance defense. Runs the current Production YOLO on a single
+Camera3.mp4 clip and overlays bboxes + SAM masks frame by frame.
 
-**How**:
-```bash
-make bootstrap                 # MLflow + MinIO + Postgres (once)
-make train                     # local CPU training, logs to MLflow
+**Used by**: nobody at runtime. Used by **you** to show that the
+model works in real time, with screenshots for the defense slides.
+
+**How**: `make jupyter` → open
+`ml/notebooks/03_inference_and_sam.ipynb` → Run all (~3 min).
+
+### 04 — Accuracy evaluation on hand-labelled GT (gating)
+
+**Status**: TODO (Day 2 plan). Will load the current Production
+YOLO + ByteTrack + CEP pipeline, run on a hand-labelled 30-s clip,
+report mAP / MOTA / IDF1 / entry-exit P/R / QR decode rate.
+
+**Production artifact**: `ml/artifacts/eval_report.json` consumed by
+`services/api/routers/client.py` to drive the Système page's
+accuracy section. **Gates** all model promotions:
+`make register-from-colab` will refuse to promote a model that
+regresses on this benchmark.
+
+### 05 — Congestion LSTM (UCI PRSA)
+
+**Production artifact**: `ml/artifacts/congestion_lstm/model.pt`
+(trained on UCI Beijing Multi-Site Air-Quality — public 33 MB
+dataset, transferred to warehouse zone occupancy).
+
+**Used by**: `services/api/_lstm_inference.py::forecast_zone_occupancy()`
+loads it at API startup. The dashboard's **Congestion** panel header
+flips the badge to `LSTM · PRSA · v1` when the trained model produced
+the forecast (vs `rule v0` when it fell back).
+
+**How**: `make jupyter` → open `05_congestion_lstm.ipynb` → Run all
+(~5 min CPU). Notebook is also committed pre-executed with plots
+embedded.
+
+**Current**: +5.4% RMSE improvement over persistence baseline at the
++3h horizon.
+
+### 06 — 2-Phase ULMFiT fine-tune (Colab T4)
+
+**Production artifact**: `runs/two_phase/phase2/weights/best.pt`
+→ becomes `logivision-detector/v2/Production` (replacing v1 from
+notebook 00).
+
+**Methodology**: Howard & Ruder 2018 ULMFiT gradual unfreezing.
+- **Phase 1** (`freeze=10`, 10 epochs, lr=1e-3): backbone frozen,
+  train detection head only. Prevents catastrophic forgetting.
+- **Phase 2** (`freeze=7`, 30 epochs, lr=1e-4): last 3 backbone
+  blocks unfrozen, low LR. Adapts deep features to warehouse
+  specifics.
+
+**How**: same Colab workflow as notebook 00, picks
+`ml/notebooks/06_two_phase_finetune.ipynb`. Bundle download at the
+end. Locally:
+```
+unzip ~/Downloads/bundle_two_phase_*.zip -d ml/runs/two_phase/
+make register-from-colab RUN=two_phase
+make worker-restart
 ```
 
-**Output**: a UUID-named run dir under `ml/runs/`, same `weights/best.pt`
-+ `results.csv`. Already present locally: 3 runs, best is
-`ml/runs/8a4db577ff1e4abf9c8276cdd6967bb7/` at mAP@0.5 = **0.995**.
+### 07 — Noisy Student teacher→student (Colab T4)
 
-### 02 — Transfer-Learning Walk-Through
+**Production artifact**: `runs/noisy_student/student/weights/best.pt`
+→ becomes `logivision-detector/v3/Production` **only if** the
+student beats the teacher on the held-out Kaggle test split (gating
+inside the notebook). On rerun: `v4`, `v5`, …
 
-**What it does**: pedagogical notebook explaining transfer learning
-step by step (frozen layers, learning-rate scheduling, why we use
-COCO weights). No new model — meant to be read with the soutenance
-defense in mind.
+**Methodology**: Xie et al. 2020 Noisy Student.
+1. Teacher = current Production model (v2 from notebook 06 or
+   later).
+2. Teacher pseudo-labels unlabeled warehouse footage at conf ≥ 0.5.
+3. Student = yolov8s (one size up from teacher's yolov8n), trained
+   on Kaggle + pseudo-labeled frames with strong noise (high
+   mosaic, mixup, dropout, HSV jitter).
+4. Evaluate student vs teacher on held-out Kaggle test.
+5. Promote student to Production ONLY if `student_wins=True`.
 
-**How**:
-```bash
-make jupyter                   # opens at http://localhost:8888
-# then click ml/notebooks/02_transfer_learning_yolo.ipynb
+**Continual production loop** — re-run weekly:
+- New unlabeled warehouse video gets added to
+  `datasets/raw/pexels_warehouse/` (or any folder you point cell 5
+  at).
+- Each iteration uses the current Production model as the new
+  teacher.
+- The dataset effectively grows each run; the student keeps
+  improving past what 361 hand-labeled Kaggle images alone could
+  achieve.
+
+**How**: same Colab workflow, picks
+`ml/notebooks/07_noisy_student.ipynb`. Read the gating output before
+promoting:
 ```
-
-**Output**: discussion + diagrams. No artifacts.
-
-### 03 — Inference Demo + Segment-Anything (SAM)
-
-**What it does**: loads the Production YOLO model (or fallback), runs
-inference on Camera3.mp4, overlays bboxes, optionally calls SAM for
-fine-grained masks on detected boxes. Useful for showing the
-detector working frame-by-frame in the soutenance.
-
-**How**:
-```bash
-# Make sure the production model is registered (see step 00 above)
-make jupyter
-# Open ml/notebooks/03_inference_and_sam.ipynb and Run All
+unzip ~/Downloads/bundle_noisy_student_*.zip -d ml/runs/noisy_student/
+cat ml/runs/noisy_student/metrics.json   # check student_wins == true
+make register-from-colab RUN=noisy_student
+make worker-restart
 ```
-
-**Output**: annotated frames saved to `ml/notebooks/.outputs/03/`.
-
-### 05 — Congestion-Forecast LSTM (UCI PRSA)
-
-**What it does**: trains a **real** 2-layer LSTM on the UCI Beijing
-Multi-Site Air-Quality dataset (12 stations, hourly PM2.5, 16 weeks
-subset). Reports RMSE/MAE on the held-out test split at +1 h / +3 h /
-+6 h horizons against a persistence baseline. The trained `model.pt`
-ships with the repo; the dashboard's Congestion panel loads it at
-startup.
-
-**How**:
-```bash
-make jupyter
-# Open ml/notebooks/05_congestion_lstm.ipynb and Run All  (~5 min CPU)
-```
-
-Or just look at the embedded outputs — the notebook is pre-executed
-and committed with plots inline.
-
-**Output**: `ml/artifacts/congestion_lstm/{model.pt, metrics.json,
-history.csv}` (committed, used by `services/api/_lstm_inference.py`).
-**Current**: LSTM beats persistence by +5.4 % RMSE at the +3 h horizon.
-
-### 06 — Two-Phase ULMFiT Fine-Tune (Colab T4)
-
-**What it does**: the **production fine-tuning recipe**. Phase 1
-freezes the backbone (`freeze=10`) and trains the detection head for
-10 epochs. Phase 2 unfreezes the last 3 backbone blocks (`freeze=7`)
-with a 10× lower LR (1e-4) for 30 epochs. Compares Phase-2 against
-Phase-1 on the held-out test split.
-
-**How** (same workflow as notebook 00):
-1. Colab → File → Open notebook → GitHub → pick
-   `ml/notebooks/06_two_phase_finetune.ipynb`.
-2. T4 GPU runtime, Kaggle secrets set.
-3. Run all (~30 min).
-4. Locally:
-   ```
-   unzip ~/Downloads/bundle_two_phase_*.zip -d ml/runs/two_phase/
-   make register-from-colab RUN=two_phase
-   make worker-restart
-   ```
-
-**Output**: `runs/two_phase/{phase1, phase2}/weights/best.pt` +
-side-by-side comparison table + training curves.
 
 ---
 
-## Full pipeline today (zero-to-Production checklist)
+## Zero-to-Production from a fresh clone
 
-1. **Bootstrap infra**: `make bootstrap && make kafka-up`
-2. **Bring up the dataset**: dataset already prepared at
-   `data/processed/kaggle_warehouse/` (committed). If missing:
-   `uv run python scripts/prepare_kaggle_warehouse.py`.
-3. **Train YOLO**: pick one
-   - Colab path: notebook 00 (T4, ~25 min) — recommended
-   - Local CPU: `make train` (~4 h)
-4. **Or use the existing 99.5%-mAP model already on disk**:
-   `make register-from-colab RUN=8a4db577ff1e4abf9c8276cdd6967bb7`
-5. **(Optional) 2-phase fine-tune** for the soutenance ULMFiT story:
-   notebook 06 on Colab T4 (~30 min).
-6. **Promote to Production**:
-   `make register-from-colab RUN=<your_run_dir>`
-7. **Restart the worker**: `make worker-restart`
-8. **Run the pipeline**:
-   ```
-   make frame-grabber SOURCE=datasets/raw/videos/Camera3.mp4 CAMERA=CAM03 FPS=2
-   make inference-worker
-   make cep ZONES=infra/zones.example.yaml
-   ```
-9. **Open the dashboard**: http://localhost:5173 — bounding boxes
-   from the trained YOLO appear in the Camera3 tile; the AI Model
-   Status panel shows the new model version.
+```bash
+# 1. Bring up infra
+make bootstrap                # MLflow + MinIO + Postgres
+make kafka-up                 # Kafka KRaft
+
+# 2. Initial YOLO training. Pick one:
+#    (a) FAST: register the existing local 99.5%-mAP run:
+make register-from-colab RUN=8a4db577ff1e4abf9c8276cdd6967bb7
+#    (b) FRESH: open ml/notebooks/00_colab_training.ipynb on Colab T4,
+#        run all, then `make register-from-colab RUN=00_colab`.
+
+# 3. (optional) better v2 via 2-Phase ULMFiT:
+#    open ml/notebooks/06 on Colab T4, run all, register as v2.
+
+# 4. (optional) v3+ via Noisy Student (only after collecting some
+#    unlabeled warehouse footage):
+#    open ml/notebooks/07 on Colab T4, run all, ONLY register if
+#    student_wins=true in metrics.json.
+
+# 5. Always restart the worker after promoting:
+make worker-restart
+
+# 6. Run the pipeline (each in its own terminal)
+make api
+make frame-grabber SOURCE=datasets/raw/videos/Camera3.mp4 CAMERA=CAM03 FPS=2
+make inference-worker
+make cep ZONES=infra/zones.example.yaml
+
+# 7. Open the dashboard
+open http://localhost:5173   # or http://localhost:8000
+```
 
 ---
 
-## Labelling more warehouse data (optional, Phase 3 work)
+## Labelling more warehouse data (optional, accelerates Noisy Student)
 
-If you want to grow the dataset beyond Kaggle's 361 images:
+The more unlabeled warehouse footage you give to notebook 07, the
+better the next student. To add labelled data instead (which
+notebooks 00 / 06 use directly):
 
 ```bash
-make cvat-up                    # http://localhost:8080
+make cvat-up                  # http://localhost:8080
 ```
 
-1. Create a CVAT project named *logivision-warehouse*.
-2. Upload frames you've extracted from your warehouse videos
-   (`ffmpeg -i Camera3.mp4 -r 1 frames/cam03_%05d.jpg`).
-3. Draw bounding boxes for `box_small`, `box_medium`, `box_large`.
-4. Export as YOLO v1.1 format.
-5. Drop the export into `data/processed/kaggle_warehouse/<split>/`
-   (the YOLO data.yaml is already configured).
-6. Re-run notebook 06 — now training on Kaggle + your real warehouse
-   labels.
+1. Create CVAT project `logivision-warehouse`.
+2. Upload extracted frames:
+   ```
+   ffmpeg -i datasets/raw/taltech_videos/Camera3.mp4 -r 1 frames/cam03_%05d.jpg
+   ```
+3. Draw bboxes for `box_small`, `box_medium`, `box_large`.
+4. Export as YOLO v1.1.
+5. Merge into `data/processed/kaggle_warehouse/`.
+6. Re-run notebook 06 — now training on Kaggle + your labels.
 
 ---
 
@@ -195,9 +223,9 @@ make cvat-up                    # http://localhost:8080
 
 | Symptom | Fix |
 |---|---|
-| `ModuleNotFoundError: No module named 'services'` in Colab | Notebook 00 / 06 already insert `sys.path`. If you cloned manually, run `import sys, pathlib; sys.path.insert(0, str(pathlib.Path.cwd()))` before any `from services.*` import. |
-| `pip install services` ran and broke things | That's an unrelated PyPI package — `pip uninstall services`. The correct fix is the `sys.path` insert above. |
-| Worker logs `fallback:yolov8n.pt` instead of `logivision-detector/v1/Production` | MLflow has no Production version; run `make register-from-colab RUN=<dir>`. |
-| Colab session disconnects mid-training | Re-open the notebook, re-run cells 1–5, then **only** cell 6 — the defensive `try: DATA_YAML` guard recovers from disk. |
-| `pyzbar` fails to import on macOS | `brew install zbar && export DYLD_LIBRARY_PATH=/opt/homebrew/opt/zbar/lib`. The `make qr-decoder` target does this automatically. |
-| Notebook outputs missing in the committed `.ipynb` | They were stripped accidentally. Re-run with outputs: `jupyter nbconvert --to notebook --execute --inplace <file>.ipynb`. |
+| `ModuleNotFoundError: No module named 'services'` in Colab | Notebooks 00 / 06 / 07 insert `sys.path` at startup. If you wrote your own cell, run `import sys, pathlib; sys.path.insert(0, str(pathlib.Path.cwd()))` before any `from services.*` import. |
+| `pip install services` ran and broke things | That's an unrelated PyPI package — `pip uninstall services`. The fix is the `sys.path` insert. |
+| Worker logs `fallback:yolov8n.pt` | MLflow has no Production version. Run `make register-from-colab RUN=<dir>`. |
+| Notebook 07 says `student_wins=false` | Don't promote. Either pseudo-label confidence threshold was too low (try 0.7) or the unlabeled frames were too out-of-distribution. Iterate. |
+| Notebook 07 cell 5 says "0 source videos" on Colab | The repo clone is shallow and `datasets/raw/pexels_warehouse/` is gitignored. Cell 5 automatically falls back to using Kaggle val images as pseudo-input — this still works, just less in-domain. |
+| `pyzbar` fails on macOS | `brew install zbar && export DYLD_LIBRARY_PATH=/opt/homebrew/opt/zbar/lib`. `make qr-decoder` handles this automatically. |
