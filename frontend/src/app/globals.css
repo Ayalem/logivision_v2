@@ -1,0 +1,183 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Theme tokens — values stored as HSL channels (no `hsl()` wrapper) so the
+  tailwind.config.ts `hsl(var(--x) / <alpha-value>)` pattern can layer
+  opacities on top. The palette mirrors the inspo's globals.css.
+*/
+
+@layer base {
+  :root {
+    --radius: 0.75rem;
+    --background: 213 33% 96%;          /* #F0F4F8 */
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 222 84% 56%;             /* #2563EB electric */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 214 100% 97%;
+    --accent-foreground: 217 47% 22%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 222 84% 56%;
+  }
+
+  .dark {
+    --background: 210 40% 4%;            /* Deep dark blue #050912 */
+    --foreground: 210 40% 98%;
+    --card: 210 40% 8% / 0.7;            /* Slightly lighter for cards */
+    --card-foreground: 210 40% 98%;
+    --popover: 210 40% 10%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217 91% 60%;              /* Electric blue */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 12%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 210 40% 14%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 210 40% 12%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 210 40% 15%;
+    --input: 210 40% 15%;
+    --ring: 217 91% 60%;
+  }
+
+  html, body, #root { height: 100%; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body:not(.dark) {
+    background:
+      radial-gradient(1200px 600px at -10% -10%, rgba(37,99,235,0.06), transparent 60%),
+      radial-gradient(1000px 500px at 110% 10%, rgba(6,182,212,0.05), transparent 60%),
+      linear-gradient(180deg, #F8FAFC 0%, #EEF2F7 100%);
+  }
+  body.dark, html.dark body {
+    background:
+      radial-gradient(1200px 600px at -10% -10%, rgba(37,99,235,0.25), transparent 60%),
+      radial-gradient(1000px 500px at 110% 10%, rgba(6,182,212,0.15), transparent 60%),
+      linear-gradient(180deg, #050912 0%, #030609 100%);
+  }
+}
+
+/*
+  Custom utilities — glass cards, gradient text, dotted grid, scanlines.
+  All consumed by components/* and the R3F HUD.
+*/
+
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+  }
+  .dark .glass {
+    background: rgba(5, 9, 18, 0.5);
+    border: 1px solid rgba(37, 99, 235, 0.15);
+  }
+  .glass-card {
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+  }
+  .dark .glass-card {
+    background: rgba(5, 9, 18, 0.6);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    box-shadow: 0 0 24px rgba(37, 99, 235, 0.1);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, #2563EB 0%, #06B6D4 50%, #8B5CF6 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+  .text-gradient-warm {
+    background: linear-gradient(135deg, #F59E0B 0%, #EF4444 50%, #8B5CF6 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+
+  .grid-pattern {
+    background-image:
+      linear-gradient(rgba(37,99,235,0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(37,99,235,0.08) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+  .dot-grid {
+    background-image: radial-gradient(rgba(37,99,235,0.15) 1px, transparent 1px);
+    background-size: 16px 16px;
+  }
+
+  .focus-ring:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* Blob animation for login page */
+  @keyframes blob {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+  }
+  .animate-blob {
+    animation: blob 7s infinite;
+  }
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+
+  /* Predictive overlay: pulsing red ring for collision risk */
+  .risk-ring {
+    box-shadow:
+      0 0 0 0   rgba(239,68,68,0.5),
+      0 0 24px  rgba(239,68,68,0.4);
+    animation: risk-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes risk-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.5), 0 0 24px rgba(239,68,68,0.3); }
+    50%      { box-shadow: 0 0 0 10px rgba(239,68,68,0.0), 0 0 36px rgba(239,68,68,0.6); }
+  }
+
+  /* Insight-chain connector arrow between vertically stacked cards */
+  .insight-connector {
+    position: relative;
+    margin: 6px 0 6px 18px;
+    height: 18px;
+    border-left: 2px dashed hsl(var(--border));
+  }
+  .insight-connector::after {
+    content: ''; position: absolute; left: -5px; bottom: -2px;
+    width: 8px; height: 8px; border-right: 2px solid hsl(var(--border));
+    border-bottom: 2px solid hsl(var(--border));
+    transform: rotate(45deg);
+  }
+}
+
+/* Scrollbar — thin and themed */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.35); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.55); }
+::-webkit-scrollbar-track { background: transparent; }
+.dark ::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.5); }
+.dark ::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 0.7); }
