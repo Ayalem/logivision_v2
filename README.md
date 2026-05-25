@@ -1,0 +1,38 @@
+# LOGIVISION
+
+Production-grade intelligent warehouse surveillance built on Computer Vision (YOLO + ByteTrack) and a fully open-source MLOps stack (MLflow, DVC, Kafka, Flink, Feast, BentoML, K3s).
+
+The full execution plan — phases, sprints, acceptance criteria, technology choices — lives in [`PROJECT_PLAN.md`](PROJECT_PLAN.md). Read it before contributing.
+
+## Current status
+
+Phase 1 (MLOps Computer Vision) — **Sprint 1.1 in progress**. See [`docs/PROGRESS.md`](docs/PROGRESS.md).
+
+## Constraints
+
+- **Budget: 0 €.** Self-hosted, OSS only. No paid SaaS.
+- **GPU: free tiers only** (Colab / Kaggle) for training; CPU + OpenVINO for serving.
+- **Reproducible**: every training run is replayable from a single Git commit (data + code + config).
+
+## Quickstart
+
+Requires Python 3.11, Docker, and [uv](https://docs.astral.sh/uv/).
+
+```bash
+make install              # install Python dev deps
+make pre-commit-install   # install Git hooks
+make bootstrap            # boot local MLOps stack (PostgreSQL + MinIO + MLflow)
+make test-integration     # 4 smoke tests against the running stack
+make down                 # stop the stack (volumes persist; `make clean` to wipe)
+```
+
+UIs: MLflow `http://localhost:5050` · MinIO Console `http://localhost:9001`.
+Run `make help` for the full list of targets.
+
+## Layout
+
+See the monorepo structure in [`PROJECT_PLAN.md` §4](PROJECT_PLAN.md). Directories appear as their corresponding sprint lands; the repo is intentionally minimal until then.
+
+## License
+
+MIT — see [`LICENSE`](LICENSE). Third-party components and license implications (notably Ultralytics AGPL-3.0) are documented in [`NOTICE.md`](NOTICE.md).

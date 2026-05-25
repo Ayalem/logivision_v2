@@ -1,0 +1,107 @@
+# LOGIVISION — Kafka (KRaft, no Zookeeper) + Apicurio Schema Registry (Phase 2).
+# Topics pre-created at boot (oneshot init container).
+#
+# Start with: `make kafka-up`
+# Topics: raw-frames, detections, tracks, events, model-drift
+# Schema Registry UI: http://localhost:8085
+
+name: logivision-kafka
+
+services:
+
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: logivision-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"      # external listener (clients on host)
+      - "9094:9094"      # internal listener (other compose services)
+    environment:
+      # KRaft single-node config (no Zookeeper).
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT_HOST://0.0.0.0:9092,PLAINTEXT://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_HOST://localhost:9092,PLAINTEXT://kafka:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"   # explicit topic creation only
+      CLUSTER_ID: 4L6g3nShT-eMCtK--X86sw
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9094 >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    networks:
+      - logivision-kafka-net
+
+  # Oneshot — creates the 5 project topics with the right partitions / retention.
+  kafka-init:
+    image: apache/kafka:3.8.0
+    container_name: logivision-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        K=/opt/kafka/bin/kafka-topics.sh
+        BS=kafka:9094
+        echo "Creating topics..."
+        $$K --bootstrap-server $$BS --create --if-not-exists --topic raw-frames    --partitions 6 --replication-factor 1 --config retention.ms=3600000  --config cleanup.policy=delete
+        $$K --bootstrap-server $$BS --create --if-not-exists --topic detections    --partitions 6 --replication-factor 1 --config retention.ms=86400000 --config cleanup.policy=delete
+        $$K --bootstrap-server $$BS --create --if-not-exists --topic tracks        --partitions 6 --replication-factor 1 --config retention.ms=86400000 --config cleanup.policy=delete
+        $$K --bootstrap-server $$BS --create --if-not-exists --topic events        --partitions 3 --replication-factor 1 --config retention.ms=604800000 --config cleanup.policy=compact
+        $$K --bootstrap-server $$BS --create --if-not-exists --topic model-drift   --partitions 1 --replication-factor 1 --config retention.ms=2592000000 --config cleanup.policy=delete
+        echo "Topics:" && $$K --bootstrap-server $$BS --list
+    networks:
+      - logivision-kafka-net
+
+  schema-registry:
+    image: apicurio/apicurio-registry-mem:2.6.5.Final
+    container_name: logivision-apicurio
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8085:8080"
+    environment:
+      QUARKUS_PROFILE: prod
+      REGISTRY_KAFKA_COMMON_BOOTSTRAP_SERVERS: kafka:9094
+    networks:
+      - logivision-kafka-net
+
+  # Lightweight web UI for browsing topics / messages.
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: logivision-kafka-ui
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8086:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: logivision
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9094
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8080/apis/registry/v2
+    networks:
+      - logivision-kafka-net
+
+volumes:
+  kafka-data:
+    name: logivision-kafka-data
+
+networks:
+  logivision-kafka-net:
+    name: logivision-kafka-net
+    driver: bridge

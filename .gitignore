@@ -1,0 +1,129 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+# These four are Python distutils/setuptools build folders. They MUST be
+# anchored to the repo root, otherwise they catch real source paths like
+# frontend/src/lib/ and Python services/.../lib/.
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# --- uv ---
+.uv/
+
+# --- Testing / coverage ---
+.coverage
+.coverage.*
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# --- Node / Frontend ---
+node_modules/
+.pnpm-store/
+.npm/
+.yarn/
+.next/
+frontend/tsconfig.tsbuildinfo
+frontend/dist/
+
+# Local design reference (Next.js inspo) — kept on disk for prompting, never committed.
+inspo_frontend/
+.nuxt/
+.parcel-cache/
+.vite/
+dist/
+build/
+.turbo/
+
+# --- IDE / editors ---
+.idea/
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.shared.json
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+# Note: .secrets.baseline IS committed — it's the detect-secrets allow-list.
+
+# --- ML artifacts (tracked by DVC, not Git) ---
+datasets/raw/
+datasets/processed/
+datasets/annotations/
+ml/runs/
+*.pt
+*.onnx
+*.bin
+*.xml
+*.engine
+mlruns/
+mlartifacts/
+
+# Trained-model artifacts under ml/artifacts/<name>/ are committed in
+# the repo — small (<1 MB), reproducible, and they're what the
+# dashboard wires into. Pattern is an explicit allow-list per model.
+!ml/artifacts/**/model.pt
+!ml/artifacts/**/history.csv
+!ml/artifacts/**/metrics.json
+
+# --- Docker / volumes ---
+.docker/
+volumes/
+
+# --- Misc ---
+*.tmp
+*.bak
+.tmp/
+.idea/
+
+# Top-level alias symlink (data → datasets) — not committed.
+/data

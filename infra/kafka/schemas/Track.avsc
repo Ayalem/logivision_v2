@@ -1,0 +1,17 @@
+{
+  "type": "record",
+  "name": "Track",
+  "namespace": "com.logivision.events.v1",
+  "doc": "Enriched detection with zone and approximate track ID.",
+  "fields": [
+    {"name": "track_id", "type": "string", "doc": "Unique track identifier"},
+    {"name": "label", "type": "string"},
+    {"name": "x", "type": "float", "doc": "Centroid X coordinate"},
+    {"name": "y", "type": "float", "doc": "Centroid Y coordinate"},
+    {"name": "confidence", "type": "float"},
+    {"name": "timestamp_ms", "type": "long"},
+    {"name": "zone", "type": "string", "doc": "Geographic zone name"},
+    {"name": "frame_id", "type": "string"},
+    {"name": "camera_id", "type": "string"}
+  ]
+}

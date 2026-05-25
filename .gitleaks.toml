@@ -1,0 +1,33 @@
+# Gitleaks configuration for LOGIVISION.
+#
+# We extend the default rule-set (loaded automatically when [extend] is
+# omitted with default = true; here we declare it explicitly).
+[extend]
+useDefault = true
+
+# Allowlist
+# ---------
+# `.secrets.baseline` stores SHA-1 hashes for the detect-secrets baseline.
+# Those 40-char hex strings look like generic-API-keys to gitleaks. They
+# are not secrets — they are checksums of false positives we already
+# audited. Same story for the lock files, which embed hex hashes of every
+# dependency tarball.
+[allowlist]
+description = "Repo-wide false positives"
+paths = [
+    '''^\.secrets\.baseline$''',
+    '''^uv\.lock$''',
+    '''^frontend/package-lock\.json$''',
+]
+
+# Pre-executed notebooks under ml/notebooks/ embed base64-encoded
+# matplotlib PNG outputs that gitleaks (and detect-secrets) flag as
+# "high entropy strings". These are committed deliberately so reviewers
+# see plots in the diff; skip the embedded outputs from the secrets
+# scan, but still scan markdown / source cells where real leaks could
+# hide (file-by-file allowlist below).
+[[rules]]
+id = "ignore-notebook-png-outputs"
+description = "Skip base64 PNG outputs inside .ipynb"
+regex = '''"image/png":\s*"[A-Za-z0-9+/=\\n]+"'''
+allowlists = [{ description = "matplotlib inline PNGs in notebooks", paths = ['''^ml/notebooks/.*\.ipynb$'''] }]

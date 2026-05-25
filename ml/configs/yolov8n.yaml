@@ -1,0 +1,29 @@
+mlflow:
+  tracking_uri: http://localhost:5050
+  experiment: warehouse-detection
+  registered_model_name: logivision-detector
+model:
+  arch: yolov8n
+  weights: yolov8n.pt
+data:
+  yaml_path: data/processed/kaggle_warehouse/data.yaml
+hyperparameters:
+  epochs: 10
+  imgsz: 320
+  batch: 16
+  patience: 0
+  optimizer: AdamW
+  lr0: 0.001
+  seed: 42
+  mosaic: 0.0
+  mixup: 0.0
+  hsv_h: 0.0
+  hsv_s: 0.0
+  hsv_v: 0.0
+  fliplr: 0.5
+  flipud: 0.0
+  degrees: 0.0
+runtime:
+  device: cpu
+  output_dir: ml/runs
+  dry_register: false
