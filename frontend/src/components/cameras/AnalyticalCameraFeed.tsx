@@ -17,7 +17,7 @@
  * When zero real detections exist for a camera the overlay is empty
  * and the bottom-right badge says "0 detections" — never a simulation.
  */
-import { Cctv } from 'lucide-react'
+import { Cctv, DoorOpen, Truck, Package, ShieldAlert } from 'lucide-react'
 import { useDetections, type DetectionBox } from '@/lib/api'
 import type { Camera } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -62,6 +62,21 @@ function statusDot(camera: Camera): { color: string; label: string } {
   return { color: 'bg-electric animate-pulse-live', label: 'feed only' }
 }
 
+/** Per-zone icon + colour. Matches the camera's role from infra/cameras.yaml.
+ *  - entrance_dock  → DoorOpen (emerald)   incoming traffic
+ *  - exit_dock      → Truck (amber)        outgoing shipments
+ *  - shelf_*        → Package (electric)   storage aisle camera
+ *  - forbidden_*    → ShieldAlert (coral)  restricted/security area
+ *  - default        → Cctv (slate)         generic CCTV */
+function RoleIcon({ zone }: { zone?: string | null }) {
+  const z = (zone ?? '').toLowerCase()
+  if (z.startsWith('entrance')) return <DoorOpen   className="h-3.5 w-3.5 text-emerald shrink-0 mt-0.5" />
+  if (z.startsWith('exit'))     return <Truck      className="h-3.5 w-3.5 text-amber   shrink-0 mt-0.5" />
+  if (z.startsWith('shelf'))    return <Package    className="h-3.5 w-3.5 text-electric shrink-0 mt-0.5" />
+  if (z.startsWith('forbidden'))return <ShieldAlert className="h-3.5 w-3.5 text-coral   shrink-0 mt-0.5" />
+  return <Cctv className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
+}
+
 export function AnalyticalCameraFeed({ camera }: { camera: Camera }) {
   const { data: detData } = useDetections(20)
 
@@ -81,12 +96,19 @@ export function AnalyticalCameraFeed({ camera }: { camera: Camera }) {
 
   return (
     <div className="glass-card rounded-2xl overflow-hidden shadow-soft ring-1 ring-border">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 text-xs border-b border-border/60">
-        <Cctv className="h-3.5 w-3.5 text-electric" />
-        <span className="font-semibold truncate">{camera.name}</span>
-        <span className="font-mono text-[10px] text-muted-foreground">{camera.id}</span>
-        <span className="ml-auto inline-flex items-center gap-1 text-[10px] uppercase tracking-wider">
+      {/* Header — role icon + name + location subtitle + status */}
+      <div className="flex items-start gap-2 px-3 py-2 text-xs border-b border-border/60">
+        <RoleIcon zone={camera.zone} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold truncate">{camera.name}</span>
+            <span className="font-mono text-[10px] text-muted-foreground shrink-0">{camera.id}</span>
+          </div>
+          {camera.location && (
+            <div className="text-[10px] text-muted-foreground truncate">{camera.location}</div>
+          )}
+        </div>
+        <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider mt-0.5 shrink-0">
           <span className={cn('h-1.5 w-1.5 rounded-full', stat.color)} />
           {stat.label}
         </span>
