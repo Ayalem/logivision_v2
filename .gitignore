@@ -127,3 +127,4 @@ volumes/
 
 # Top-level alias symlink (data → datasets) — not committed.
 /data
+CLAUDE.md
