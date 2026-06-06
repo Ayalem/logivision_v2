@@ -157,6 +157,38 @@ export const useModelInfo = () =>
     staleTime: 30_000,
   })
 
+// ─── Admin / Système MLOps hooks ───
+// Lightweight wrappers around the existing /api/topics, /api/drift, /api/benchmarks
+// endpoints so the Système page can render them in one place without hitting
+// the FastAPI gateway four times on render.
+
+export interface TopicMessages {
+  messages: Array<Record<string, unknown>>
+  degraded: boolean
+}
+export const useTopicMessages = (topic: string, n = 10) =>
+  useQuery<TopicMessages>({
+    queryKey: ['topic', topic, n],
+    queryFn: () => getJson<TopicMessages>(`/api/topics/${topic}/messages?n=${n}`),
+    refetchInterval: 5_000,
+  })
+
+export interface ReportListing {
+  reports: Array<{ name: string; size_bytes: number; modified: number }>
+}
+export const useDriftReports = () =>
+  useQuery<ReportListing>({
+    queryKey: ['drift'],
+    queryFn: () => getJson<ReportListing>('/api/drift/reports'),
+    refetchInterval: 60_000,
+  })
+export const useBenchmarks = () =>
+  useQuery<ReportListing>({
+    queryKey: ['benchmarks'],
+    queryFn: () => getJson<ReportListing>('/api/benchmarks'),
+    refetchInterval: 60_000,
+  })
+
 export interface HeatmapResponse {
   layer: string
   grid: number
