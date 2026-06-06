@@ -156,81 +156,13 @@ def _today_ms_range() -> tuple[int, int]:
 # ---------------------------------------------------------------------------
 
 
-def _demo_events(now_ms: int) -> list[dict]:
-    """Synthetic events spanning the last ~5 minutes for the demo."""
-
-    def evt(
-        off_s: int,
-        etype: str,
-        sev: str,
-        camera: str,
-        track: str,
-        zone: str,
-        cls: str = "carton",
-        cx: float = 0.5,
-        cy: float = 0.5,
-    ) -> dict:
-        return {
-            "event_id": f"demo-{etype}-{track}-{off_s}",
-            "event_type": etype,
-            "severity": sev,
-            "timestamp_ms": now_ms - off_s * 1000,
-            "camera_id": camera,
-            "track_id": track,
-            "payload": {
-                "zone": zone,
-                "class_name": cls,
-                "centroid_x": f"{cx:.3f}",
-                "centroid_y": f"{cy:.3f}",
-            },
-        }
-
-    return [
-        # Entries/exits — drives the "Entrées Aujourd'hui" / "Sorties" tiles.
-        evt(15, "entry", "info", "CAM01", "CAM01:1:1:1", "entrance_dock", cx=0.12, cy=0.10),
-        evt(48, "entry", "info", "CAM01", "CAM01:1:2:1", "entrance_dock", cx=0.15, cy=0.08),
-        evt(96, "entry", "info", "CAM01", "CAM01:1:3:1", "entrance_dock", cx=0.10, cy=0.12),
-        evt(140, "entry", "info", "CAM01", "CAM01:1:4:1", "entrance_dock", cx=0.14, cy=0.10),
-        evt(35, "exit", "info", "CAM02", "CAM02:1:7:1", "exit_dock", cx=0.88, cy=0.09),
-        evt(72, "exit", "info", "CAM02", "CAM02:1:8:1", "exit_dock", cx=0.92, cy=0.12),
-        evt(118, "exit", "info", "CAM02", "CAM02:1:9:1", "exit_dock", cx=0.86, cy=0.11),
-        # Stationary objects → congestion forecast in shelf_A1, collision pair in shelf_A2.
-        evt(
-            60, "stationary_object", "warning", "CAM03", "CAM03:0:1:1", "shelf_A1", cx=0.18, cy=0.42
-        ),
-        evt(
-            40, "stationary_object", "warning", "CAM03", "CAM03:0:1:2", "shelf_A1", cx=0.20, cy=0.45
-        ),
-        evt(
-            25, "stationary_object", "warning", "CAM03", "CAM03:0:1:3", "shelf_A1", cx=0.19, cy=0.43
-        ),
-        evt(
-            20, "stationary_object", "warning", "CAM03", "CAM03:0:5:1", "shelf_A2", cx=0.48, cy=0.42
-        ),
-        evt(
-            8, "stationary_object", "warning", "CAM03", "CAM03:0:6:1", "shelf_A2", cx=0.50, cy=0.45
-        ),
-        # Critical: intrusion in forbidden aisle.
-        evt(
-            55,
-            "zone_violation",
-            "critical",
-            "CAM05",
-            "CAM05:0:2:1",
-            "forbidden_aisle",
-            cls="personne",
-            cx=0.82,
-            cy=0.55,
-        ),
-    ]
-
-
-def _events_or_demo(events: list[dict], _degraded: bool, now_ms: int) -> list[dict]:
-    """Return real events if any; otherwise synthesize demo data so the
-    dashboard always has something to render."""
-    if events:
-        return events
-    return _demo_events(now_ms)
+# Removed: _demo_events() + _events_or_demo() used to synthesize 14 fake
+# events whenever the Kafka `events` topic was empty, so the dashboard
+# always had numbers to render. They produced the "12.2K cartons / 4
+# entries / 6 anomalies" the operator saw with no pipeline running.
+# Deleted to honour the no-fake-data principle: every visible KPI /
+# forecast / anomaly must trace to a real Kafka event. When the pipeline
+# is off, the UI renders a "waiting for pipeline" empty state instead.
 
 
 def _humanise_event(evt: dict) -> str:
@@ -348,8 +280,7 @@ def list_cameras() -> dict:
 @router.get("/anomalies")
 def list_anomalies(n: int = 50) -> dict:
     events, degraded = _peek_topic(KAFKA_EVENTS_TOPIC, n=max(n * 2, 100))
-    now_ms = int(time.time() * 1000)
-    events = _events_or_demo(events, degraded, now_ms)
+    # real events only - no demo fallback (no-fake-data principle)
     out: list[dict] = []
     for evt in events:
         sev = evt.get("severity", "info")
@@ -383,8 +314,7 @@ def list_anomalies(n: int = 50) -> dict:
 @router.get("/entries-exits")
 def list_entries_exits(n: int = 50) -> dict:
     events, degraded = _peek_topic(KAFKA_EVENTS_TOPIC, n=max(n * 2, 100))
-    now_ms = int(time.time() * 1000)
-    events = _events_or_demo(events, degraded, now_ms)
+    # real events only - no demo fallback (no-fake-data principle)
     out: list[dict] = []
     for evt in events:
         etype = evt.get("event_type")
@@ -412,12 +342,16 @@ def list_entries_exits(n: int = 50) -> dict:
 
 @router.get("/kpis")
 def get_kpis() -> dict:
-    """Roll up events + zone configs into the dashboard's KPI tiles."""
-    events, degraded_events = _peek_topic(KAFKA_EVENTS_TOPIC, n=500)
-    now_ms_for_demo = int(time.time() * 1000)
-    events = _events_or_demo(events, degraded_events, now_ms_for_demo)
+    """Roll up REAL Kafka events into the dashboard's KPI tiles.
+
+    No fake fallbacks: every visible number comes from the live events
+    topic. When the pipeline isn't running, the topic is empty, the
+    KPIs are zero, and pipelineActive=false so the UI can render a
+    "waiting for pipeline" empty state instead of fabricating traffic.
+    """
+    events, degraded_events = _peek_topic(KAFKA_EVENTS_TOPIC, n=2000)
+    detections, _ = _peek_topic("detections", n=100, timeout_s=0.5)
     cameras_raw = _load_yaml(CAMERAS_FILE).get("cameras", []) or []
-    zones_raw = _load_yaml(ZONES_FILE).get("zones", []) or []
 
     start_ms, _ = _today_ms_range()
     entries_today = sum(
@@ -446,27 +380,42 @@ def get_kpis() -> dict:
         if f.get("camera_id") and now_ms - int(f.get("timestamp_ms") or 0) < 30_000
     }
 
-    # Total cartons in the warehouse: sum of mock currentItems across zones.
-    total_boxes = sum(
-        int((1000 + (_stable_pct(z["name"] + "cap", 0, 30) * 100)) * _stable_pct(z["name"]) / 100)
-        for z in zones_raw
-    )
+    # Total cartons in the warehouse = real entries - real exits seen on
+    # the events topic. Topic retention bounds how far back this counts
+    # (default 7 days). Pure derived value; no synthetic seeding.
+    total_entries = sum(1 for e in events if e.get("event_type") == "entry")
+    total_exits = sum(1 for e in events if e.get("event_type") == "exit")
+    total_boxes = max(0, total_entries - total_exits)
 
     avg_proc = 0
-    inference_samples = [e.get("inference_ms") for e in events if e.get("inference_ms")]
+    inference_samples = [d.get("inference_ms") for d in detections if d.get("inference_ms")]
     if inference_samples:
         avg_proc = int(sum(inference_samples) / len(inference_samples))
+
+    # pipelineActive: did ANY real signal arrive recently? UI uses this
+    # to flip tile rendering between "—" and live numbers.
+    pipeline_active = bool(events) or bool(detections) or bool(live_ids)
+
+    # Stock level needs a configured capacity. 1000 is the default
+    # target until per-zone capacity gets surfaced.
+    capacity = 1000
+    stock_pct = round(100 * total_boxes / capacity) if pipeline_active else 0
 
     return {
         "totalBoxes": total_boxes,
         "todayEntries": entries_today,
         "todayExits": exits_today,
         "activeAnomalies": active_anomalies,
-        "systemStatus": "operational" if not degraded_events else "degraded",
+        "systemStatus": (
+            "operational"
+            if pipeline_active and not degraded_events
+            else ("degraded" if degraded_events else "waiting")
+        ),
         "camerasOnline": len(live_ids),
         "totalCameras": len(cameras_raw),
         "avgProcessingTime": avg_proc,
-        "stockLevel": min(100, (total_boxes // 200) if total_boxes else 0),
+        "stockLevel": min(100, stock_pct),
+        "pipelineActive": pipeline_active,
         "degraded": degraded_events,
     }
 
@@ -661,8 +610,8 @@ def get_model_info() -> dict:
 @router.get("/predictions")
 def list_predictions(n: int = 50) -> dict:
     events, degraded = _peek_topic(KAFKA_EVENTS_TOPIC, n=max(n * 4, 200))
+    # real events only - no demo fallback (no-fake-data principle)
     now_ms = int(time.time() * 1000)
-    events = _events_or_demo(events, degraded, now_ms)
     derived = _predict_from_events(events, now_ms)
     # Flatten and cap.
     flat = derived["congestion"] + derived["collision"] + derived["trajectories"]
@@ -750,8 +699,7 @@ def get_heatmap(
     grid: int = Query(HEATMAP_GRID, ge=8, le=64),
 ) -> dict:
     events, degraded = _peek_topic(KAFKA_EVENTS_TOPIC, n=200, timeout_s=0.5)
-    now_ms = int(time.time() * 1000)
-    events = _events_or_demo(events, degraded, now_ms)
+    # real events only - no demo fallback (no-fake-data principle)
     zones_raw = _load_yaml(ZONES_FILE).get("zones", []) or []
     cells = _heatmap_grid(layer, events, zones_raw, grid)
     return {

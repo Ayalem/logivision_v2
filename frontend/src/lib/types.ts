@@ -71,11 +71,14 @@ export interface Kpis {
   todayEntries: number
   todayExits: number
   activeAnomalies: number
-  systemStatus: 'operational' | 'degraded' | 'offline'
+  systemStatus: 'operational' | 'degraded' | 'offline' | 'waiting'
   camerasOnline: number
   totalCameras: number
   avgProcessingTime: number
   stockLevel: number
+  /** True iff a real Kafka event / detection / raw-frame arrived recently.
+   * When false the tiles render '—' instead of zeros and a waiting banner appears. */
+  pipelineActive: boolean
   degraded: boolean
 }
 
