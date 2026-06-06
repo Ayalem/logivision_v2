@@ -341,16 +341,24 @@ print('metrics.json written')
 stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
 bundle_root = pathlib.Path(f'bundle_two_phase_{stamp}')
 bundle_root.mkdir(exist_ok=True)
-phase2_best = OUT / 'phase2' / 'weights' / 'best.pt'
-if phase2_best.is_file():
-    (bundle_root / 'weights').mkdir(exist_ok=True)
-    shutil.copy(phase2_best, bundle_root / 'weights' / 'best.pt')
+(bundle_root / 'weights').mkdir(exist_ok=True)
+
+# Ultralytics 8.3.x sometimes writes runs/<name>/, sometimes runs/detect/<name>/.
+# Glob both layouts so the bundle always finds Phase-2's best.pt.
+phase2_candidates = sorted(pathlib.Path('runs').glob('**/phase2/weights/best.pt'))
+assert phase2_candidates, 'No phase2 best.pt found anywhere under runs/'
+phase2_best = phase2_candidates[0]
+print(f'Phase-2 weights: {phase2_best}')
+shutil.copy(phase2_best, bundle_root / 'weights' / 'best.pt')
+
+# metrics.json was written to OUT / metrics.json earlier
 shutil.copy(OUT / 'metrics.json', bundle_root / 'metrics.json')
-# Copy training curves CSVs too.
+
+# Copy training curves CSVs too (also glob — Ultralytics path may vary).
 for p in ('phase1', 'phase2'):
-    src = OUT / p / 'results.csv'
-    if src.is_file():
-        shutil.copy(src, bundle_root / f'results_{p}.csv')
+    csv_candidates = sorted(pathlib.Path('runs').glob(f'**/{p}/results.csv'))
+    if csv_candidates:
+        shutil.copy(csv_candidates[0], bundle_root / f'results_{p}.csv')
 
 zip_path = shutil.make_archive(str(bundle_root), 'zip', bundle_root)
 print(f'bundle: {zip_path} ({pathlib.Path(zip_path).stat().st_size // 1024} KB)')
