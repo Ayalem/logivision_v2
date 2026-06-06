@@ -177,8 +177,13 @@ prep.ROOT = KAGGLE_BOX
 prep.OUT  = pathlib.Path('data/processed/kaggle_warehouse')
 prep.main()
 
-DATA_YAML = (prep.OUT / 'data.yaml').resolve()
-print('kaggle data.yaml:', DATA_YAML)
+# Scene-aware re-split — fixes the Roboflow temporal-leakage bug. See
+# scripts/reshuffle_splits_by_scene.py for the audit + methodology.
+import subprocess
+subprocess.run([sys.executable, 'scripts/reshuffle_splits_by_scene.py'], check=True)
+
+DATA_YAML = pathlib.Path('data/processed/kaggle_warehouse_clean/data.yaml').resolve()
+print('clean kaggle data.yaml:', DATA_YAML)
 """
 )
 

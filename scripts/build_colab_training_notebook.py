@@ -160,19 +160,31 @@ for split in ('train', 'valid', 'test'):
 """
 )
 
-# Cell 5 - convert
+# Cell 5 - convert + scene-aware re-split
 code(
-    """# 5. Convert OBB labels -> axis-aligned bbox using the same script the
-#    repo uses locally. We just point its ROOT constant at the Colab cache.
-import importlib, sys
+    """# 5. Convert OBB labels -> axis-aligned bbox + RE-SPLIT BY SCENE.
+#
+#    The Kaggle dataset's default train/val/test split has temporal
+#    contamination: sequential frames of the same flight scattered
+#    across all three splits. A model trained on frame 4293 trivially
+#    recognises frame 4294 (test) — inflates mAP@0.5 to ~99% which is
+#    NOT real generalisation.
+#
+#    Fix: after the OBB->AABB conversion, run scripts/reshuffle_splits_by_scene.py
+#    to group entire scenes into one split. The clean dataset lives at
+#    data/processed/kaggle_warehouse_clean/. This is what we train on.
+import importlib, sys, subprocess
 sys.path.insert(0, 'scripts')
 import prepare_kaggle_warehouse as prep
 prep.ROOT = KAGGLE_BOX                      # point at the Colab cache
 prep.OUT  = pathlib.Path('data/processed/kaggle_warehouse')
 prep.main()
 
-DATA_YAML = (prep.OUT / 'data.yaml').resolve()
-print('data.yaml:', DATA_YAML)
+# Scene-aware re-split (the honest train/val/test).
+subprocess.run([sys.executable, 'scripts/reshuffle_splits_by_scene.py'], check=True)
+
+DATA_YAML = pathlib.Path('data/processed/kaggle_warehouse_clean/data.yaml').resolve()
+print('clean data.yaml:', DATA_YAML)
 print(DATA_YAML.read_text())
 """
 )
