@@ -1,11 +1,12 @@
 /**
- * Top-of-overview KPI tiles.
+ * Top-of-overview KPI tiles — 5 cards matching the operator mockup.
  *
- * No fake data: when the Kafka pipeline isn't producing events, every
- * tile renders an em-dash and a "waiting for pipeline" notice appears
- * below the strip with the exact `make` commands the operator needs.
+ * No fake data: tiles render an em-dash and a "waiting for pipeline"
+ * banner appears beneath when pipelineActive is false.
  */
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, Package, RadioTower } from 'lucide-react'
+import {
+  AlertTriangle, ArrowDownRight, ArrowUpRight, Package, RadioTower, Gauge,
+} from 'lucide-react'
 import { useKpis } from '@/lib/api'
 import { cn, formatNumber } from '@/lib/utils'
 
@@ -22,9 +23,18 @@ export function KpiStrip() {
   const live = !!data?.pipelineActive
   const placeholder = '—'
 
+  // Efficiency score = 100 − (anomalies / max(1, today_events) × 100).
+  // Operator-friendly proxy: 100% when no anomalies, drops as anomaly rate rises.
+  let efficiency = placeholder
+  if (live) {
+    const total = data!.todayEntries + data!.todayExits + data!.activeAnomalies
+    const eff = 100 - (data!.activeAnomalies / Math.max(1, total)) * 100
+    efficiency = `${Math.max(0, Math.round(eff))}%`
+  }
+
   const tiles: Tile[] = [
     {
-      label: 'Cartons',
+      label: 'Cartons en stock',
       value: live ? formatNumber(data!.totalBoxes) : placeholder,
       icon: Package,
       accent: 'bg-electric',
@@ -49,11 +59,18 @@ export function KpiStrip() {
       accent: 'bg-coral',
       hint: live ? (data!.activeAnomalies > 0 ? 'à surveiller' : 'tout est calme') : undefined,
     },
+    {
+      label: 'Efficacité',
+      value: efficiency,
+      icon: Gauge,
+      accent: 'bg-purple',
+      hint: live ? '100 − taux d\'anomalies' : 'proxy temps réel',
+    },
   ]
 
   return (
     <div className="space-y-2">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         {tiles.map((t) => {
           const Icon = t.icon
           return (
@@ -62,13 +79,13 @@ export function KpiStrip() {
               <div className="pl-3">
                 <div className="flex items-center gap-2 mb-1.5 text-xs font-medium text-muted-foreground">
                   <Icon className="h-4 w-4" />
-                  {t.label}
+                  <span className="truncate">{t.label}</span>
                 </div>
                 <div className={cn('text-2xl font-bold tabular-nums', !live && 'text-muted-foreground/60', isLoading && 'opacity-50')}>
                   {t.value}
                 </div>
                 {t.hint && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">{t.hint}</div>
+                  <div className="mt-1 text-[11px] text-muted-foreground truncate">{t.hint}</div>
                 )}
               </div>
             </div>

@@ -1,7 +1,17 @@
 /**
- * Operator hero page. Six wow-factor pillars converge here:
- *  KPI strip → 3D Twin (heatmap + trajectories + collisions) → Insight rail
- *           → Congestion panel → Analytical camera tiles.
+ * Vue d'ensemble — operator hero matching the dark-navy mockup.
+ *
+ *  ┌──────────────────────────────────────────────────────────────┐
+ *  │  KpiStrip  (5 tiles)                                         │
+ *  ├──────────────────────────────────────┬───────────────────────┤
+ *  │                                      │ LiveAlertsPanel       │
+ *  │   DigitalTwin  (R3F, hero)           │ CongestionPanel       │
+ *  │                                      │ AiModelStatus         │
+ *  ├──────────────────────────────────────┴───────────────────────┤
+ *  │  InsightRail  (narrative AI cards)                            │
+ *  ├──────────────────────────────────────────────────────────────┤
+ *  │  Caméras · 3 analytical tiles                                 │
+ *  └──────────────────────────────────────────────────────────────┘
  */
 import { useCameras } from '@/lib/api'
 import { AnalyticalCameraFeed } from '@/components/cameras/AnalyticalCameraFeed'
@@ -10,25 +20,32 @@ import { DigitalTwin } from '@/components/digital-twin/DigitalTwin'
 import { InsightRail } from '@/components/insights/InsightChain'
 import { CongestionPanel } from '@/components/predictions/CongestionPanel'
 import { AiModelStatus } from '@/components/predictions/AiModelStatus'
+import { LiveAlertsPanel } from '@/components/predictions/LiveAlertsPanel'
 
 export function OverviewPage() {
   const { data: cams } = useCameras()
   const cameras = cams?.cameras ?? []
   return (
     <div className="space-y-5">
+      {/* Row 1 — KPI strip (5 tiles) */}
       <KpiStrip />
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <div className="xl:col-span-2 space-y-4">
+      {/* Row 2 — Twin (hero) + right rail (Alerts / Congestion / AI Status) */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        <div className="xl:col-span-8 space-y-4">
           <DigitalTwin />
-          <CongestionPanel />
         </div>
-        <div className="xl:col-span-1 space-y-4">
+        <div className="xl:col-span-4 space-y-4">
+          <LiveAlertsPanel />
+          <CongestionPanel />
           <AiModelStatus />
-          <InsightRail />
         </div>
       </div>
 
+      {/* Row 3 — Insight chain (narrative) */}
+      <InsightRail />
+
+      {/* Row 4 — Analytical camera tiles */}
       <section className="space-y-2">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold">Caméras · vues analytiques</h2>
