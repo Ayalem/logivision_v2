@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo demo-stop demo-logs demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean camera-videos qr-decoder register-from-colab worker-restart
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo demo-stop demo-logs demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean camera-videos fetch-taltech-videos qr-decoder register-from-colab worker-restart
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -197,6 +197,9 @@ frontend-clean: ## Wipe frontend/dist and frontend/node_modules (irreversible)
 
 camera-videos: ## Create Camera1.mp4..Camera5.mp4 symlinks in datasets/raw/videos/
 	$(UV) run python scripts/setup_camera_videos.py
+
+fetch-taltech-videos: ## Download the TalTech warehouse Camera1..5 clips (~360 MB, MIT)
+	$(UV) run python scripts/fetch_taltech_videos.py
 
 qr-decoder: ## Run the QR/barcode decoder service against Kafka (macOS: needs brew install zbar)
 	DYLD_LIBRARY_PATH=/opt/homebrew/opt/zbar/lib:$$DYLD_LIBRARY_PATH \

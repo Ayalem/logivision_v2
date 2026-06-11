@@ -8,12 +8,13 @@ The convention is intentional — it lets the operator swap a physical
 camera by physically renaming a file, no code change, no config reload.
 
 We have:
-  * `datasets/raw/taltech_videos/Camera3.mp4` — the real TalTech
-    synthetic-warehouse clip (52 s, 1080p, AGPL).
-  * `datasets/raw/pexels_warehouse/*.mp4`     — 15 Pexels stock clips
-    fetched with a "warehouse" search query (used as visually-plausible
-    stand-ins until the rest of the TalTech Cameras 1/2/4/5 are
-    downloaded — they're each ~10 GB so we don't ship them).
+  * `datasets/raw/taltech_videos/Camera{1..5}.mp4` — the TalTech
+    synthetic-warehouse clips (1080p, MIT, ~90 MB each) — five fixed
+    CCTV angles on the SAME warehouse. Fetched by
+    `scripts/fetch_taltech_videos.py` (`make fetch-taltech-videos`).
+  * `datasets/raw/pexels_warehouse/*.mp4`          — 15 Pexels stock
+    clips kept on disk as a last-resort fallback for any TalTech
+    camera that hasn't been downloaded yet.
 
 This script creates the 5 `CameraN.mp4` symlinks in
 `datasets/raw/videos/` so the streaming endpoint can find them all.
@@ -34,15 +35,17 @@ TALTECH_DIR = REPO / "datasets" / "raw" / "taltech_videos"
 PEXELS_DIR = REPO / "datasets" / "raw" / "pexels_warehouse"
 
 # Camera → role mapping (matches infra/cameras.example.yaml).
-# Each entry: (camera_index, role_description, preferred_source)
-# `preferred_source` is "taltech" if a matching CameraN.mp4 exists under
-# taltech_videos/, else "pexels:<size_rank>" where size_rank=0 means biggest.
+# Each entry: (camera_index, role_description, source_chain)
+# `source_chain` is tried in order: "taltech" resolves to the matching
+# CameraN.mp4 under taltech_videos/; "pexels:<size_rank>" picks a stock
+# clip by size (rank 0 = biggest). TalTech is always preferred — five
+# coherent CCTV angles on the same warehouse beat unrelated stock clips.
 ROLES = [
-    (1, "Entrée Principale (Porte A)", "pexels:0"),
-    (2, "Quai d'Expédition (Porte B)", "pexels:1"),
-    (3, "Allée Stockage A1-A2", "taltech"),
-    (4, "Allée Stockage A3-A4", "pexels:2"),
-    (5, "Allée Restreinte (Couloir tech.)", "pexels:3"),
+    (1, "Entrée Principale (Porte A)", ["taltech", "pexels:0"]),
+    (2, "Quai d'Expédition (Porte B)", ["taltech", "pexels:1"]),
+    (3, "Allée Stockage A1-A2", ["taltech", "pexels:2"]),
+    (4, "Allée Stockage A3-A4", ["taltech", "pexels:3"]),
+    (5, "Allée Restreinte (Couloir tech.)", ["taltech", "pexels:4"]),
 ]
 
 
@@ -60,23 +63,25 @@ def main() -> int:
     print(f"TalTech archive         : {len(list(TALTECH_DIR.glob('Camera*.mp4')))} files")
     print()
 
-    for idx, role, source in ROLES:
+    for idx, role, chain in ROLES:
         link = VIDEOS_DIR / f"Camera{idx}.mp4"
         target: Path | None = None
 
-        if source == "taltech":
-            cand = TALTECH_DIR / f"Camera{idx}.mp4"
-            if cand.is_file():
-                target = Path("..") / "taltech_videos" / cand.name
-            else:
+        for source in chain:
+            if source == "taltech":
+                cand = TALTECH_DIR / f"Camera{idx}.mp4"
+                if cand.is_file():
+                    target = Path("..") / "taltech_videos" / cand.name
+                    break
                 print(
-                    f"⚠  CAM0{idx}: TalTech Camera{idx}.mp4 not on disk; "
-                    f"will fall back to Pexels"
+                    f"⚠  CAM0{idx}: TalTech Camera{idx}.mp4 not on disk "
+                    f"(run `make fetch-taltech-videos`); trying fallback"
                 )
-        if target is None and source.startswith("pexels:"):
-            rank = int(source.split(":", 1)[1])
-            if rank < len(pexels_by_size):
-                target = Path("..") / "pexels_warehouse" / pexels_by_size[rank].name
+            elif source.startswith("pexels:"):
+                rank = int(source.split(":", 1)[1])
+                if rank < len(pexels_by_size):
+                    target = Path("..") / "pexels_warehouse" / pexels_by_size[rank].name
+                    break
 
         if target is None:
             print(f"❌ CAM0{idx} ({role}): no source available")
