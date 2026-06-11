@@ -91,10 +91,13 @@ while not (REPO / 'pyproject.toml').is_file() and REPO != REPO.parent:
 os.chdir(REPO)
 print('repo root:', REPO)
 
-DATA_YAML = REPO / 'data' / 'processed' / 'kaggle_warehouse' / 'data.yaml'
+# Compare on the CLEAN scene-aware split — the leaky original split makes
+# every candidate look near-perfect and the ranking meaningless.
+DATA_YAML = REPO / 'data' / 'processed' / 'kaggle_warehouse_clean' / 'data.yaml'
 assert DATA_YAML.is_file(), (
     f'Missing dataset YAML at {DATA_YAML}. '
-    'Run `uv run python scripts/prepare_kaggle_warehouse.py` first.'
+    'Run `uv run python scripts/prepare_kaggle_warehouse.py` then '
+    '`uv run python scripts/reshuffle_splits_by_scene.py` first.'
 )
 
 ARTIFACTS = REPO / 'ml' / 'artifacts'

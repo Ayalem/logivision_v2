@@ -207,7 +207,8 @@ try:
     DATA_YAML
 except NameError:
     import pathlib
-    DATA_YAML = pathlib.Path('data/processed/kaggle_warehouse/data.yaml').resolve()
+    # Recover the CLEAN (scene-aware) yaml — never the original leaky split.
+    DATA_YAML = pathlib.Path('data/processed/kaggle_warehouse_clean/data.yaml').resolve()
     if not DATA_YAML.is_file():
         raise FileNotFoundError(
             f'{DATA_YAML} not found — please run cells 1-5 (Runtime -> Run all).'

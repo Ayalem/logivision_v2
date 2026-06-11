@@ -23,11 +23,38 @@ from pathlib import Path
 
 import yaml
 
-ROOT = (
-    Path.home()
-    / ".cache/kagglehub/datasets/zoya77/warehouse-delivery-box-detection-dataset/versions/2/Box Dataset"
-)
+DATASET_SLUG = "zoya77/warehouse-delivery-box-detection-dataset"
+
+# Resolved lazily in main() so importing this module never triggers a
+# download. Notebooks override it directly: `prep.ROOT = <path>`.
+ROOT: Path | None = None
 OUT = Path(__file__).resolve().parent.parent / "data" / "processed" / "kaggle_warehouse"
+
+
+def discover_root() -> Path:
+    """Locate the 'Box Dataset' dir, version-agnostically.
+
+    Tries the local kagglehub cache first (newest version wins), then a
+    fresh kagglehub download. Fails with an actionable message instead of
+    a bare assert when credentials are missing.
+    """
+    cache = Path.home() / ".cache/kagglehub/datasets" / DATASET_SLUG / "versions"
+    if cache.is_dir():
+        candidates = sorted(cache.glob("*/Box Dataset"))
+        if candidates:
+            return candidates[-1]
+    try:
+        import kagglehub
+
+        return Path(kagglehub.dataset_download(DATASET_SLUG)) / "Box Dataset"
+    except Exception as exc:  # noqa: BLE001
+        raise SystemExit(
+            f"Kaggle dataset '{DATASET_SLUG}' not in the kagglehub cache and the "
+            f"download failed ({exc}). Set KAGGLE_USERNAME + KAGGLE_KEY in your "
+            "environment (token: https://www.kaggle.com/settings → 'Create New Token') "
+            "and retry."
+        ) from exc
+
 
 # Roboflow-exported OBB datasets rarely ship `data.yaml`; the user's
 # slice has 3 class IDs (0, 1, 2). Without dataset-card access we use
@@ -101,14 +128,13 @@ def convert_split(src: Path, dst_images: Path, dst_labels: Path) -> tuple[int, i
 
 
 def main() -> None:
-    assert (
-        ROOT.is_dir()
-    ), f"Dataset not found at {ROOT}. Run `kagglehub.dataset_download(...)` first."
+    root = ROOT if ROOT is not None else discover_root()
+    assert root.is_dir(), f"Dataset not found at {root}."
     OUT.mkdir(parents=True, exist_ok=True)
 
     totals = {}
     for src_name, tgt_name in SPLITS.items():
-        src = ROOT / src_name
+        src = root / src_name
         if not src.is_dir():
             print(f"⚠  skipping {src_name} — not in source")
             continue
