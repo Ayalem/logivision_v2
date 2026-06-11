@@ -12,9 +12,14 @@
 #   shelf      → no event; passive zone for occupancy aggregates
 #
 # `forbidden: true` (legacy) is still honored — it maps to `kind: forbidden`.
+#
+# `capacity` (optional, default 10) is the track-count capacity used by the
+# CEP's zone-occupancy snapshots: ratio = min(1, occupied_tracks/capacity).
+# The congestion LSTM consumes these bounded 0..1 ratios.
 
 zones:
   - name: entrance_dock
+    capacity: 6
     kind: entry
     category: Réception
     polygon:
@@ -24,6 +29,7 @@ zones:
       - {x: 0.00, y: 0.20}
 
   - name: exit_dock
+    capacity: 6
     kind: exit
     category: Expédition
     polygon:
@@ -33,6 +39,7 @@ zones:
       - {x: 0.75, y: 0.20}
 
   - name: shelf_A1
+    capacity: 12
     kind: shelf
     category: Stockage
     polygon:
@@ -42,6 +49,7 @@ zones:
       - {x: 0.05, y: 0.55}
 
   - name: shelf_A2
+    capacity: 12
     kind: shelf
     category: Stockage
     polygon:
@@ -51,6 +59,7 @@ zones:
       - {x: 0.35, y: 0.55}
 
   - name: shelf_A3
+    capacity: 12
     kind: shelf
     category: Stockage
     polygon:
@@ -60,6 +69,7 @@ zones:
       - {x: 0.05, y: 0.85}
 
   - name: shelf_A4
+    capacity: 12
     kind: shelf
     category: Stockage
     polygon:
@@ -69,6 +79,7 @@ zones:
       - {x: 0.35, y: 0.85}
 
   - name: forbidden_aisle
+    capacity: 4
     kind: forbidden
     category: Restreint
     polygon:

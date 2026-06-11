@@ -15,9 +15,11 @@ export function CongestionPanel() {
   const { data } = usePredictions()
   const items = data?.buckets.congestion ?? []
   // Show the LSTM badge as soon as ANY congestion event is tagged with
-  // the trained-model source. Falls back to "rule v0" otherwise.
-  const usesLstm = items.some((c) => c.forecast_source === 'lstm-prsa-v1')
-  const badgeLabel = usesLstm ? 'LSTM · PRSA · v1' : 'rule v0'
+  // the trained-model source. "LSTM · en attente" when the model is
+  // loaded but real occupancy history is still accumulating.
+  const usesLstm = items.some((c) => c.forecast_source === 'lstm-birmingham-v2')
+  const warmingUp = !usesLstm && items.some((c) => c.lstm_status === 'insufficient-history')
+  const badgeLabel = usesLstm ? 'LSTM · Birmingham · v2' : warmingUp ? 'LSTM · en attente d\u2019historique' : 'rule v0'
   const badgeClass = usesLstm
     ? 'bg-emerald/20 text-emerald border-emerald/40'
     : 'bg-amber/15 text-amber border-amber/30'

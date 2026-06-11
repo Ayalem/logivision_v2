@@ -81,6 +81,9 @@ class Zone:
     forbidden: bool
     polygon: list[tuple[float, float]]  # (x, y) in normalized 0..1 coordinates
     kind: str = "forbidden"  # one of ZONE_KINDS
+    # Track-count capacity used to turn raw occupancy into a bounded 0..1
+    # ratio — the quantity the congestion LSTM was trained on.
+    capacity: int = 10
 
 
 @dataclass
@@ -88,7 +91,13 @@ class CEPConfig:
     bootstrap_servers: str = os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092")
     input_topic: str = os.environ.get("KAFKA_DETECTIONS_TOPIC", "detections")
     output_topic: str = os.environ.get("KAFKA_EVENTS_TOPIC", "events")
+    occupancy_topic: str = os.environ.get("KAFKA_OCCUPANCY_TOPIC", "zone-occupancy")
     consumer_group: str = os.environ.get("KAFKA_CONSUMER_GROUP", "cep-processors")
+    # Zone-occupancy snapshots: one message per zone every
+    # `occupancy_snapshot_s`; a track stops counting toward a zone after
+    # `occupancy_idle_expiry_s` without a sighting.
+    occupancy_snapshot_s: float = float(os.environ.get("OCCUPANCY_SNAPSHOT_S", "300"))
+    occupancy_idle_expiry_s: float = 30.0
     stationary_window_s: float = 30.0
     stationary_radius_px: float = 25.0
     # Re-emit cooldown so we don't spam the same stationary alert.
@@ -151,6 +160,7 @@ def _load_zones(path: Path | None) -> list[Zone]:
                 forbidden=forbidden,
                 polygon=[(p["x"], p["y"]) for p in entry["polygon"]],
                 kind=kind,
+                capacity=int(entry.get("capacity", 10)),
             )
         )
     return zones
@@ -279,6 +289,65 @@ def evaluate_zone_membership(
     return None
 
 
+class ZoneOccupancyAggregator:
+    """Tracks live per-zone occupancy and emits periodic ratio snapshots.
+
+    Counts distinct tracks currently inside each zone (a track expires
+    after `occupancy_idle_expiry_s` without a sighting) and every
+    `occupancy_snapshot_s` produces one message per zone for the
+    `zone-occupancy` topic:
+
+        {"timestamp_ms", "zone", "occupied_tracks", "capacity", "ratio"}
+
+    `ratio` is bounded 0..1 (occupied/capacity) — the exact quantity the
+    congestion LSTM was trained on (Parking Birmingham occupancy ratios),
+    which is what makes the domain transfer defensible. Uses event time
+    (message timestamps), so offline replays produce a faithful history.
+    """
+
+    def __init__(self, zones: list[Zone], config: CEPConfig):
+        self._zones = zones
+        self._config = config
+        # zone name → {track_id → last_seen_ms}
+        self._presence: dict[str, dict[str, int]] = {z.name: {} for z in zones}
+        self._last_snapshot_ms = 0
+
+    def observe(self, zone_name: str | None, track_id: str, now_ms: int) -> None:
+        """Record one sighting. `zone_name=None` removes the track everywhere."""
+        for name, tracks in self._presence.items():
+            if name == zone_name:
+                tracks[track_id] = now_ms
+            else:
+                tracks.pop(track_id, None)
+
+    def maybe_snapshot(self, now_ms: int) -> list[dict]:
+        """Return one snapshot per zone if the interval elapsed, else []."""
+        if self._last_snapshot_ms == 0:
+            self._last_snapshot_ms = now_ms
+            return []
+        if now_ms - self._last_snapshot_ms < self._config.occupancy_snapshot_s * 1000:
+            return []
+        self._last_snapshot_ms = now_ms
+        expiry_ms = int(self._config.occupancy_idle_expiry_s * 1000)
+        snapshots: list[dict] = []
+        for zone in self._zones:
+            tracks = self._presence[zone.name]
+            for tid, seen in list(tracks.items()):
+                if now_ms - seen > expiry_ms:
+                    del tracks[tid]
+            capacity = max(1, zone.capacity)
+            snapshots.append(
+                {
+                    "timestamp_ms": now_ms,
+                    "zone": zone.name,
+                    "occupied_tracks": len(tracks),
+                    "capacity": capacity,
+                    "ratio": round(min(1.0, len(tracks) / capacity), 4),
+                }
+            )
+        return snapshots
+
+
 def make_event(
     *,
     event_type: str,
@@ -304,6 +373,7 @@ def process_one(
     states: dict[str, TrackState],
     zones: list[Zone],
     config: CEPConfig,
+    occupancy: ZoneOccupancyAggregator | None = None,
 ) -> list[dict]:
     """Update state for one frame and return the events to emit."""
     emitted: list[dict] = []
@@ -381,6 +451,8 @@ def process_one(
         # Dispatch on the zone's kind: forbidden → critical violation;
         # entry/exit → info event used by the KPI tiles; shelf → silent.
         zone = evaluate_zone_membership(detection, image_w, image_h, zones)
+        if occupancy is not None:
+            occupancy.observe(zone.name if zone else None, track_id, timestamp_ms)
         if zone is not None and state.last_zone != zone.name:
             state.last_zone = zone.name
             payload = {"zone": zone.name, "class_name": detection.get("class_name", "")}
@@ -437,6 +509,7 @@ def run(config: CEPConfig, zones: list[Zone], stop_after: int | None = None) -> 
     producer = Producer({"bootstrap.servers": config.bootstrap_servers})
 
     states: dict[str, TrackState] = defaultdict(TrackState)
+    occupancy = ZoneOccupancyAggregator(zones, config) if zones else None
     running = True
     n_messages = 0
     n_events = 0
@@ -458,7 +531,7 @@ def run(config: CEPConfig, zones: list[Zone], stop_after: int | None = None) -> 
                 continue
             try:
                 detection_msg = json.loads(msg.value().decode("utf-8"))
-                events = process_one(detection_msg, states, zones, config)
+                events = process_one(detection_msg, states, zones, config, occupancy)
                 for evt in events:
                     producer.produce(
                         config.output_topic,
@@ -466,6 +539,13 @@ def run(config: CEPConfig, zones: list[Zone], stop_after: int | None = None) -> 
                         value=json.dumps(evt).encode(),
                     )
                     n_events += 1
+                if occupancy is not None:
+                    for snap in occupancy.maybe_snapshot(int(detection_msg["timestamp_ms"])):
+                        producer.produce(
+                            config.occupancy_topic,
+                            key=snap["zone"].encode(),
+                            value=json.dumps(snap).encode(),
+                        )
                 producer.poll(0)
                 consumer.commit(msg, asynchronous=False)
                 n_messages += 1

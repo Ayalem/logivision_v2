@@ -141,6 +141,8 @@ def test_zones_endpoint_serves_yaml(tmp_path, monkeypatch) -> None:
         )
     )
     monkeypatch.setattr(client_router, "ZONES_FILE", zones_path)
+    # No zone-occupancy snapshots → occupancy must be null (never invented).
+    monkeypatch.setattr(client_router, "_peek_topic", lambda *_a, **_kw: ([], True))
     # Bust the LRU cache so the temp file is actually read.
     client_router._load_yaml_cached.cache_clear()
     r = client.get("/api/zones")
@@ -156,9 +158,48 @@ def test_zones_endpoint_serves_yaml(tmp_path, monkeypatch) -> None:
     assert z["y"] == 0.0
     assert z["width"] == 25.0
     assert z["height"] == 20.0
-    # Mock occupancy is deterministic and bounded.
-    assert 0 <= z["occupancy"] <= 100
-    assert z["status"] in {"normal", "warning", "critical"}
+    # Honest empty state: no snapshot → null occupancy, unknown status.
+    assert z["occupancy"] is None
+    assert z["status"] == "unknown"
+    assert z["live"] is False
+
+
+def test_zones_endpoint_uses_real_occupancy_snapshots(tmp_path, monkeypatch) -> None:
+    zones_path = tmp_path / "zones.yaml"
+    zones_path.write_text(
+        _yaml.safe_dump(
+            {
+                "zones": [
+                    {
+                        "name": "shelf_A1",
+                        "kind": "shelf",
+                        "capacity": 10,
+                        "polygon": [
+                            {"x": 0.0, "y": 0.0},
+                            {"x": 0.5, "y": 0.0},
+                            {"x": 0.5, "y": 0.5},
+                            {"x": 0.0, "y": 0.5},
+                        ],
+                    }
+                ]
+            }
+        )
+    )
+    monkeypatch.setattr(client_router, "ZONES_FILE", zones_path)
+    snap = {
+        "timestamp_ms": 1_700_000_000_000,
+        "zone": "shelf_A1",
+        "occupied_tracks": 7,
+        "capacity": 10,
+        "ratio": 0.7,
+    }
+    monkeypatch.setattr(client_router, "_peek_topic", lambda *_a, **_kw: ([snap], False))
+    client_router._load_yaml_cached.cache_clear()
+    z = client.get("/api/zones").json()["zones"][0]
+    assert z["occupancy"] == 70
+    assert z["currentItems"] == 7
+    assert z["status"] == "warning"
+    assert z["live"] is True
 
 
 def test_cameras_endpoint_serves_yaml(tmp_path, monkeypatch) -> None:
@@ -392,14 +433,10 @@ def test_heatmap_rejects_unknown_layer() -> None:
     assert r.status_code == 422  # pydantic regex validation
 
 
-def test_insights_endpoint_always_has_at_least_one_chain(monkeypatch) -> None:
-    # No events at all → demo fallback chain.
+def test_insights_endpoint_empty_without_events(monkeypatch) -> None:
+    # No events at all → NO fabricated chains (no-fake-data principle);
+    # the rail renders its empty state instead.
     monkeypatch.setattr(client_router, "_peek_topic", lambda *_a, **_kw: ([], True))
     r = client.get("/api/insights")
     assert r.status_code == 200
-    body = r.json()
-    assert len(body["insights"]) >= 1
-    chain = body["insights"][0]
-    assert "title" in chain
-    assert "steps" in chain
-    assert isinstance(chain["steps"], list) and len(chain["steps"]) >= 2
+    assert r.json()["insights"] == []

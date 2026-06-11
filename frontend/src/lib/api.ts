@@ -102,10 +102,14 @@ export interface CongestionForecast {
   confidence: number
   density: number
   timestamp_ms: number
-  /** Identifies whether the trained LSTM (lstm-prsa-v1) produced this
-   * forecast or the rule-based fallback (rule-v0). The UI uses this to
-   * flip the panel badge between the green LSTM tag and the amber rule tag. */
-  forecast_source?: 'lstm-prsa-v1' | 'rule-v0'
+  /** Identifies whether the trained LSTM (lstm-birmingham-v2) produced
+   * this forecast or the rule-based fallback (rule-v0). The UI uses this
+   * to flip the panel badge between the LSTM tag and the amber rule tag. */
+  forecast_source?: 'lstm-birmingham-v2' | 'rule-v0'
+  /** Present when the LSTM is loaded but lacks real occupancy history. */
+  lstm_status?: 'insufficient-history'
+  lstm_bins_available?: number
+  lstm_bins_required?: number
 }
 export interface CollisionRisk {
   event_id: string

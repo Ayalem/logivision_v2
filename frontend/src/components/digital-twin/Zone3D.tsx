@@ -25,7 +25,7 @@ function zoneGeometry(zone: Zone): THREE.ExtrudeGeometry {
     if (i === 0) shape.moveTo(x, z)
     else shape.lineTo(x, z)
   })
-  const height = ZONE_HEIGHT * (0.3 + (zone.occupancy / 100) * 0.9)
+  const height = ZONE_HEIGHT * (0.3 + ((zone.occupancy ?? 0) / 100) * 0.9)
   const geo = new THREE.ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
   // Lay the shape onto the XZ plane (rotate -90° around X).
   geo.rotateX(-Math.PI / 2)
@@ -94,7 +94,7 @@ export function Zone3D({ zone }: { zone: Zone }) {
           anchorX="center"
           anchorY="middle"
         >
-          {zone.name} · {zone.occupancy}%
+          {zone.name} · {zone.occupancy === null ? '—' : `${zone.occupancy}%`}
         </Text>
       )}
     </group>

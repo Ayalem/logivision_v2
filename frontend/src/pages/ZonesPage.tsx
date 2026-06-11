@@ -39,13 +39,13 @@ export function ZonesPage() {
               {z.category} · {z.kind}
             </div>
             <div className="h-2 rounded-full bg-muted overflow-hidden mb-2">
-              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${z.occupancy}%`, backgroundColor: color }} />
+              <div className="h-full rounded-full transition-all duration-500" style={{ width: `${z.occupancy ?? 0}%`, backgroundColor: color }} />
             </div>
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-muted-foreground">
-                {formatNumber(z.currentItems)} / {formatNumber(z.capacity)}
+                {z.currentItems === null ? '—' : formatNumber(z.currentItems)} / {formatNumber(z.capacity)}
               </span>
-              <span className="font-bold tabular-nums">{z.occupancy}%</span>
+              <span className="font-bold tabular-nums">{z.occupancy === null ? '—' : `${z.occupancy}%`}</span>
             </div>
           </button>
         )

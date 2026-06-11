@@ -26,15 +26,18 @@ export function formatRelativeFR(date: Date | string | number): string {
   return `il y a ${Math.floor(diff / 86400)}j`
 }
 
-/** Bucket an occupancy % into a brand color. Critical/elevated/moderate/normal. */
-export function getOccupancyColor(occupancy: number): string {
+/** Bucket an occupancy % into a brand color. Critical/elevated/moderate/normal.
+ *  `null` (no real snapshot yet) renders neutral slate. */
+export function getOccupancyColor(occupancy: number | null): string {
+  if (occupancy === null) return '#64748B'
   if (occupancy >= 90) return '#EF4444'
   if (occupancy >= 70) return '#F59E0B'
   if (occupancy >= 50) return '#06B6D4'
   return '#10B981'
 }
 
-export function getOccupancyLabel(occupancy: number): string {
+export function getOccupancyLabel(occupancy: number | null): string {
+  if (occupancy === null) return 'En attente'
   if (occupancy >= 90) return 'Critique'
   if (occupancy >= 70) return 'Élevé'
   if (occupancy >= 50) return 'Modéré'

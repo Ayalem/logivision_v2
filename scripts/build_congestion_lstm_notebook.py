@@ -69,7 +69,7 @@ papers (cited by the DeepMind WaveNet follow-up, GraphWaveNet, etc.).
 | Comparison plot | inline in the notebook |
 
 The dashboard's Congestion panel loads `model.pt` at startup and flips
-its badge from `rule v0` to `LSTM · Birmingham-transferred · v1`.
+its badge from `rule-v0` to `lstm-birmingham-v2`.
 """
 )
 
@@ -185,7 +185,7 @@ occ_col  = next(c for c in raw.columns if 'occupancy' in c.lower() and 'ratio' n
 cap_col  = next((c for c in raw.columns if 'capacity' in c.lower()), None)
 print(f'cols detected: ts={ts_col!r}  id={id_col!r}  occ={occ_col!r}  cap={cap_col!r}')
 
-raw[ts_col] = pd.to_datetime(raw[ts_col], infer_datetime_format=True)
+raw[ts_col] = pd.to_datetime(raw[ts_col])
 raw = raw.sort_values(ts_col)
 
 # Compute occupancy ratio (0-1) — bounded like zone occupancy %
@@ -198,16 +198,24 @@ else:
 
 raw['occ_ratio'] = raw['occ_ratio'].clip(0, 1)
 
-# Pivot: rows=time, cols=lots
-df = raw.pivot_table(index=ts_col, columns=id_col, values='occ_ratio', aggfunc='mean')
+# Round the slightly-irregular stamps (07:59, 08:32, ...) onto the 30-min
+# grid, then pivot: rows = observed 30-min slots, cols = lots.
+#
+# IMPORTANT: do NOT resample onto a continuous wall-clock grid. Birmingham
+# only records during car-park operating hours (~08:00-16:30, ~18 slots per
+# day); a continuous grid would be ~65% NaN, every lot would fail the
+# sparsity threshold below, and the dataset would collapse to 0 columns.
+# The standard treatment is to linearise the series over operating hours —
+# windows then span days seamlessly in "operating time". At deployment the
+# warehouse runs continuously, so its 30-min grid is unbroken anyway.
+raw['ts30'] = raw[ts_col].dt.round('30min')
+df = raw.pivot_table(index='ts30', columns=id_col, values='occ_ratio', aggfunc='mean')
 df = df.sort_index()
-print(f'pivoted shape: {df.shape}  ({df.shape[1]} lots, {df.shape[0]} time steps)')
+# Keep only slots where at least half the lots report (drops stray rows).
+df = df[df.notna().mean(axis=1) >= 0.5]
+print(f'pivoted shape: {df.shape}  ({df.shape[1]} lots, {df.shape[0]} 30-min slots)')
 print('time range:', df.index.min(), '→', df.index.max())
 print('NaN frac:', df.isna().mean().mean().round(4))
-
-# Resample to hourly (Birmingham is 30-min; hourly matches our HORIZONS label)
-df = df.resample('1H').mean()
-print(f'after hourly resample: {df.shape}')
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 4))
 sample = df.values.flatten(); sample = sample[~np.isnan(sample)]
@@ -217,8 +225,8 @@ axes[0].set_xlabel('occupancy (0=empty, 1=full)'); axes[0].set_ylabel('count')
 axes[0].grid(alpha=0.2)
 
 col0 = df.columns[0]
-axes[1].plot(df[col0].iloc[:24*7].values, color='#06B6D4', linewidth=0.9)
-axes[1].set_title(f'Lot {col0} — first 7 days (hourly)')
+axes[1].plot(df[col0].iloc[:18*7].values, color='#06B6D4', linewidth=0.9)
+axes[1].set_title(f'Lot {col0} — first 7 operating days (30-min slots)')
 axes[1].set_xlabel('hour'); axes[1].set_ylabel('occupancy ratio'); axes[1].grid(alpha=0.2)
 
 plt.tight_layout(); plt.show()
@@ -240,6 +248,7 @@ code(
     """# Drop lots with >40% NaN (parking lots that went offline)
 df = df.dropna(axis=1, thresh=int(0.60 * len(df)))
 print(f'after dropping sparse lots: {df.shape}')
+assert df.shape[1] >= 4, f'Only {df.shape[1]} lots survived — check the pivot above'
 
 df = df.ffill().bfill()
 assert df.isna().sum().sum() == 0, 'Still NaNs after ffill/bfill'
@@ -249,18 +258,20 @@ mu = df.mean(axis=0).values.astype(np.float32)
 sigma = (df.std(axis=0).values + 1e-6).astype(np.float32)
 arr = ((df.values - mu) / sigma).astype(np.float32)
 
-INPUT_LEN = 24       # past 24 hours
-HORIZONS  = [1, 3, 6]  # predict +1h / +3h / +6h (same label as PRSA version)
+BIN_MINUTES   = 30                 # native Birmingham resolution
+INPUT_LEN     = 48                 # past 24 hours = 48 half-hour steps
+HORIZONS_H    = [1, 3, 6]          # forecast labels in hours
+HORIZON_STEPS = [2, 6, 12]         # the same horizons in 30-min steps
 
-def build_windows(arr, input_len, horizons):
+def build_windows(arr, input_len, horizon_steps):
     X, Y = [], []
-    h_max = max(horizons)
+    h_max = max(horizon_steps)
     for t in range(input_len, arr.shape[0] - h_max):
         X.append(arr[t - input_len:t])
-        Y.append(np.stack([arr[t + h - 1] for h in horizons]))
+        Y.append(np.stack([arr[t + h - 1] for h in horizon_steps]))
     return np.array(X, dtype=np.float32), np.array(Y, dtype=np.float32)
 
-X, Y = build_windows(arr, INPUT_LEN, HORIZONS)
+X, Y = build_windows(arr, INPUT_LEN, HORIZON_STEPS)
 print('X.shape =', X.shape, '  Y.shape =', Y.shape)
 
 n = len(X)
@@ -283,9 +294,9 @@ code(
     err = y_pred - y_true
     return float(np.sqrt(np.mean(err ** 2))), float(np.mean(np.abs(err)))
 
-persistence_preds = np.stack([X_test[:, -1, :]] * len(HORIZONS), axis=1)
+persistence_preds = np.stack([X_test[:, -1, :]] * len(HORIZONS_H), axis=1)
 persistence_metrics = {}
-for i, h in enumerate(HORIZONS):
+for i, h in enumerate(HORIZONS_H):
     r, m = rmse_mae(Y_test[:, i, :], persistence_preds[:, i, :])
     persistence_metrics[f'+{h}h'] = {'rmse': r, 'mae': m}
 print('Persistence baseline (z-scored space):')
@@ -315,7 +326,7 @@ code(
         y = self.head(out[:, -1, :])
         return y.view(-1, self.n_horizons, self.n_sensors)
 
-model = CongestionLSTM(X.shape[2], len(HORIZONS), hidden=64, dropout=0.2).to(DEVICE)
+model = CongestionLSTM(X.shape[2], len(HORIZONS_H), hidden=64, dropout=0.2).to(DEVICE)
 print(model)
 print(f'Trainable params: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}')
 """
@@ -396,21 +407,26 @@ test_true = Y_test
 
 lstm_metrics = {}
 print(f'{"horizon":<8} {"pers RMSE":<12} {"pers MAE":<12} {"LSTM RMSE":<12} {"LSTM MAE":<12} {"improv%"}')
-for i, h in enumerate(HORIZONS):
+for i, h in enumerate(HORIZONS_H):
     pr, pm = rmse_mae(test_true[:, i, :], persistence_preds[:, i, :])
     lr, lm = rmse_mae(test_true[:, i, :], test_pred[:, i, :])
     lstm_metrics[f'+{h}h'] = {'rmse': lr, 'mae': lm}
     pct = (pr - lr) / pr * 100
     print(f'+{h}h      {pr:<12.4f} {pm:<12.4f} {lr:<12.4f} {lm:<12.4f} {pct:+.1f}%')
 
-# Save artifacts
+# Save artifacts. `bin_minutes` + `feature` let the API assert at load
+# time that its inference-side binning matches what the model was
+# trained on (occupancy ratios on a 30-min grid — never event counts).
 torch.save({
     'model_state': model.state_dict(),
     'config': {
-        'n_nodes':       X.shape[2],
-        'n_horizons':    len(HORIZONS),
-        'horizons_hours': HORIZONS,
-        'input_len':     INPUT_LEN,
+        'n_nodes':        X.shape[2],
+        'n_horizons':     len(HORIZONS_H),
+        'horizons_hours': HORIZONS_H,
+        'horizon_steps':  HORIZON_STEPS,
+        'input_len':      INPUT_LEN,
+        'bin_minutes':    BIN_MINUTES,
+        'feature':        'occupancy_ratio',
         'mu':   mu.tolist(),
         'sigma': sigma.tolist(),
     },
@@ -422,7 +438,7 @@ with open(ARTIFACTS / 'metrics.json', 'w') as f:
     json.dump({
         'lstm':        lstm_metrics,
         'persistence': persistence_metrics,
-        'dataset':     'Parking Birmingham (Stolfi 2017) — 32 lots, hourly occupancy ratio',
+        'dataset':     'Parking Birmingham (Stolfi 2017) — 30-min occupancy ratio per lot',
         'n_lots':      int(X.shape[2]),
         'n_steps':     int(arr.shape[0]),
     }, f, indent=2)
@@ -454,19 +470,23 @@ md(
     """## 10. Transfer to warehouse zones
 
 The trained `CongestionLSTM` is loaded at API startup by
-`services/api/_lstm_inference.py`. It receives a `(B, 24, n_zones)`
-window of z-scored zone-occupancy ratios (built from the rolling
-`events` Kafka topic) and returns predicted occupancy at +1h / +3h / +6h.
+`services/api/_lstm_inference.py`. At inference the API consumes the
+`zone-occupancy` Kafka topic (per-zone occupancy *ratios* 0–1, emitted
+by the CEP every few minutes), bins them onto the same 30-min grid the
+model was trained on (48 bins = 24 h), z-scores with the checkpoint's
+mu/sigma, and returns predicted occupancy ratios at +1h / +3h / +6h.
 
-**What the paper claims**: LSTM trained on real multi-location
-occupancy data (Birmingham parking) beats persistence on the held-out
-test set. Architecture is domain-agnostic — the same weights are applied
-to warehouse zone occupancy at inference. Fine-tuning on live warehouse
-data is Future Work.
+**Why this transfer is defensible**: train-time and inference-time
+inputs are the *same quantity* (bounded occupancy ratio per location on
+a 30-min grid) with the same normalisation. The only shift is the
+domain (car parks → warehouse zones) — documented in the paper, with
+fine-tuning on accumulated warehouse history as Future Work. When less
+than 12 h of real history exists, the API reports
+`insufficient-history` and the panel says so instead of faking a curve.
 
 The Système panel shows these metrics under the model badge:
 ```
-Congestion (LSTM · Birmingham-transferred · v1)
+Congestion (lstm-birmingham-v2)
   +1h   RMSE=X.XXXX  MAE=X.XXXX
   +3h   RMSE=X.XXXX  MAE=X.XXXX
   +6h   RMSE=X.XXXX  MAE=X.XXXX

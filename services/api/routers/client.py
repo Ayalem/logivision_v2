@@ -12,7 +12,6 @@ ported frontend can swap mocks → real data without refactor.
 from __future__ import annotations
 
 import contextlib
-import hashlib
 import json
 import logging
 import math
@@ -38,19 +37,14 @@ CAMERAS_FILE = Path(
 KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP", "localhost:9092")
 KAFKA_EVENTS_TOPIC = os.environ.get("KAFKA_EVENTS_TOPIC", "events")
 KAFKA_RAW_FRAMES_TOPIC = os.environ.get("KAFKA_RAW_FRAMES_TOPIC", "raw-frames")
+KAFKA_DETECTIONS_TOPIC = os.environ.get("KAFKA_DETECTIONS_TOPIC", "detections")
+KAFKA_OCCUPANCY_TOPIC = os.environ.get("KAFKA_OCCUPANCY_TOPIC", "zone-occupancy")
 LOGIVISION_ROLE = os.environ.get("LOGIVISION_ROLE", "operator")
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _stable_pct(seed: str, lo: int = 30, hi: int = 95) -> int:
-    """Deterministic 'occupancy %' from a name, so reloading the dashboard
-    doesn't shuffle numbers around in the demo."""
-    h = int(hashlib.md5(seed.encode()).hexdigest(), 16)
-    return lo + (h % max(1, hi - lo))
 
 
 def _occupancy_status(pct: int) -> str:
@@ -165,6 +159,16 @@ def _today_ms_range() -> tuple[int, int]:
 # is off, the UI renders a "waiting for pipeline" empty state instead.
 
 
+def _payload_confidence(payload: dict) -> int | None:
+    """Calibrated model confidence (0..1 in the event payload) as a
+    percentage, or None when the event carries none (rule events)."""
+    try:
+        value = float(payload["confidence"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return int(round(min(1.0, max(0.0, value)) * 100))
+
+
 def _humanise_event(evt: dict) -> str:
     t = evt.get("event_type", "event")
     p = evt.get("payload") or {}
@@ -195,14 +199,34 @@ def get_me() -> dict:
 
 @router.get("/zones")
 def list_zones() -> dict:
+    """Zones from the YAML registry + REAL occupancy from the
+    `zone-occupancy` topic (latest CEP snapshot per zone). When no
+    snapshot exists yet, `occupancy` is null and `live` is false —
+    the UI renders an em-dash, never an invented percentage."""
     raw = _load_yaml(ZONES_FILE)
+    snapshots, _degraded = _peek_topic(KAFKA_OCCUPANCY_TOPIC, n=100, timeout_s=0.5)
+    latest: dict[str, dict] = {}
+    for snap in snapshots:  # already newest-first
+        zone = snap.get("zone")
+        if zone and zone not in latest:
+            latest[zone] = snap
+
     out: list[dict] = []
     for entry in raw.get("zones", []) or []:
         name = entry["name"]
         polygon = entry.get("polygon", [])
         x, y, w, h = _polygon_bbox(polygon)
-        occupancy = _stable_pct(name)
-        capacity = 1000 + (_stable_pct(name + "cap", 0, 30) * 100)
+        snap = latest.get(name)
+        capacity = int(entry.get("capacity", 10))
+        if snap is not None:
+            occupancy = int(round(float(snap.get("ratio", 0.0)) * 100))
+            current = int(snap.get("occupied_tracks", 0))
+            status = _occupancy_status(occupancy)
+            updated = datetime.fromtimestamp(
+                int(snap.get("timestamp_ms", 0)) / 1000, tz=UTC
+            ).isoformat()
+        else:
+            occupancy, current, status, updated = None, None, "unknown", None
         out.append(
             {
                 "id": name,
@@ -211,14 +235,15 @@ def list_zones() -> dict:
                 "category": entry.get("category", "Stockage"),
                 "occupancy": occupancy,
                 "capacity": capacity,
-                "currentItems": int(capacity * occupancy / 100),
-                "status": _occupancy_status(occupancy),
+                "currentItems": current,
+                "status": status,
+                "live": snap is not None,
                 "x": round(x, 2),
                 "y": round(y, 2),
                 "width": round(w, 2),
                 "height": round(h, 2),
                 "polygon": [{"x": p["x"], "y": p["y"]} for p in polygon],
-                "lastUpdated": datetime.now(UTC).isoformat(),
+                "lastUpdated": updated,
             }
         )
     return {"zones": out}
@@ -247,6 +272,15 @@ def list_cameras() -> dict:
             if cid:
                 live_camera_ids.add(cid)
 
+    # Real per-camera detection counts from the latest worker output —
+    # zero when the pipeline is idle, never an invented number.
+    det_msgs, _ = _peek_topic(KAFKA_DETECTIONS_TOPIC, n=50, timeout_s=0.5)
+    det_counts: dict[str, int] = defaultdict(int)
+    for m in det_msgs:
+        cid = m.get("camera_id")
+        if cid:
+            det_counts[cid] += len(m.get("detections", []) or [])
+
     out: list[dict] = []
     for entry in cameras_raw:
         cid = entry["id"]
@@ -270,7 +304,7 @@ def list_cameras() -> dict:
                 "kafkaLive": is_live,
                 "resolution": entry.get("resolution", "1280x720"),
                 "fps": fps_value,
-                "detectionCount": _stable_pct(cid + "det", 100, 4000),
+                "detectionCount": det_counts.get(cid, 0),
                 "lastDetection": last_seen,
             }
         )
@@ -302,7 +336,10 @@ def list_anomalies(n: int = 50) -> dict:
                 ).isoformat(),
                 "resolved": False,
                 "cameraId": evt.get("camera_id") or "—",
-                "confidence": _stable_pct(evt.get("event_id", "x") + "conf", 70, 99),
+                # Real model score when the event carries one (the trajectory
+                # AE writes payload.score); null for rule events — the UI
+                # hides the field rather than inventing a percentage.
+                "confidence": _payload_confidence(payload),
                 "eventType": etype_raw,
             }
         )
@@ -438,10 +475,15 @@ COLLISION_PAIR_WINDOW_S = 30  # ≤ 30 s between events in same zone → collisi
 HEATMAP_GRID = 20  # 20x20 cells over the 0..1 floor
 
 
-def _predict_from_events(events: list[dict], now_ms: int) -> dict[str, list[dict]]:
+def _predict_from_events(
+    events: list[dict],
+    now_ms: int,
+    occupancy_snapshots: list[dict] | None = None,
+) -> dict[str, list[dict]]:
     """Pure: derive prediction events from a slice of recent CEP events.
 
-    Returns a dict with keys: congestion, collision, trajectories.
+    `occupancy_snapshots` are `zone-occupancy` topic messages — the LSTM's
+    input. Returns a dict with keys: congestion, collision, trajectories.
     """
     cutoff = now_ms - CONGESTION_WINDOW_S * 1000
 
@@ -465,9 +507,11 @@ def _predict_from_events(events: list[dict], now_ms: int) -> dict[str, list[dict
             with contextlib.suppress(TypeError, ValueError):
                 by_track[tid].append({"t": ts, "x": float(cx), "y": float(cy)})
 
-    # Try the trained LSTM first; fall back to rule when the model
-    # isn't loaded (artifact missing, PyTorch unavailable, etc).
+    # Try the trained LSTM first; fall back to rule when the model isn't
+    # loaded (artifact missing, PyTorch unavailable) or there isn't enough
+    # real occupancy history yet (honest `insufficient-history` tag).
     from services.api._lstm_inference import (
+        SOURCE_INSUFFICIENT,
         SOURCE_LSTM,
         SOURCE_RULE,
         forecast_zone_occupancy,
@@ -479,27 +523,31 @@ def _predict_from_events(events: list[dict], now_ms: int) -> dict[str, list[dict
             continue
         latest_ts = max(int(e.get("timestamp_ms", 0)) for e in evts)
 
-        lstm_out = forecast_zone_occupancy(events, zone, now_ms)
-        if lstm_out is not None:
-            # Newest horizon = first element of forecast (sorted ascending).
-            # forecast values are z-scored; squashing through a sigmoid
-            # gives a 0-1 density estimate the UI can render directly.
-            import math
-
-            short_horizon = float(lstm_out["forecast"][0])
-            density = 1.0 / (1.0 + math.exp(-short_horizon))
+        lstm_out = forecast_zone_occupancy(occupancy_snapshots or [], zone, now_ms)
+        extra: dict = {}
+        if lstm_out is not None and lstm_out["source"] == SOURCE_LSTM:
+            # Forecast values are occupancy ratios (0..1) de-normalised by
+            # the inference module — render directly as density.
+            density = float(lstm_out["forecast"][0])
             # ETA shrinks with predicted occupancy. Floor at 30 s.
             eta = max(30, int(240 * (1 - density)))
-            # Confidence proxy = inverse of held-out MAE (later: load from
-            # metrics.json). Hard-coded conservative 0.75 for v1.
+            # Conservative fixed confidence for v2; the panel also shows
+            # the held-out RMSE from /api/model-info.
             confidence = 0.75
             source = SOURCE_LSTM
+            extra["horizons_hours"] = lstm_out["horizons_hours"]
+            extra["forecast_ratios"] = lstm_out["forecast"]
         else:
             # Rule fallback.
             eta = max(30, 240 - len(evts) * 30)
             confidence = min(0.95, 0.55 + 0.1 * len(evts))
             density = min(1.0, len(evts) / 10.0)
             source = SOURCE_RULE
+            if lstm_out is not None and lstm_out["source"] == SOURCE_INSUFFICIENT:
+                # Tell the UI the LSTM exists but needs more real history.
+                extra["lstm_status"] = SOURCE_INSUFFICIENT
+                extra["lstm_bins_available"] = lstm_out["bins_available"]
+                extra["lstm_bins_required"] = lstm_out["bins_required"]
 
         congestion.append(
             {
@@ -512,6 +560,7 @@ def _predict_from_events(events: list[dict], now_ms: int) -> dict[str, list[dict
                 "density": round(density, 2),
                 "timestamp_ms": latest_ts,
                 "forecast_source": source,
+                **extra,
             }
         )
 
@@ -612,7 +661,9 @@ def list_predictions(n: int = 50) -> dict:
     events, degraded = _peek_topic(KAFKA_EVENTS_TOPIC, n=max(n * 4, 200))
     # real events only - no demo fallback (no-fake-data principle)
     now_ms = int(time.time() * 1000)
-    derived = _predict_from_events(events, now_ms)
+    # 24 h of 5-min snapshots across ~7 zones ≈ 2000 messages.
+    snapshots, _ = _peek_topic(KAFKA_OCCUPANCY_TOPIC, n=2500, timeout_s=1.5)
+    derived = _predict_from_events(events, now_ms, snapshots)
     # Flatten and cap.
     flat = derived["congestion"] + derived["collision"] + derived["trajectories"]
     flat.sort(key=lambda e: e.get("timestamp_ms", 0), reverse=True)
@@ -641,19 +692,24 @@ def _heatmap_grid(layer: str, events: list[dict], zones: list[dict], size: int) 
                 d2 = (x - cx) ** 2 + (y - cy) ** 2
                 grid[iy][ix] += weight * math.exp(-d2 / (2 * sigma * sigma))
 
-    if layer == "traffic":
-        # Recent event centroids drive the heat.
-        for e in events:
+    def _event_centroids(filtered: list[dict]) -> list[tuple[float, float]]:
+        pts: list[tuple[float, float]] = []
+        for e in filtered:
             p = e.get("payload") or {}
             try:
-                cx = float(p.get("centroid_x"))
-                cy = float(p.get("centroid_y"))
+                pts.append((float(p.get("centroid_x")), float(p.get("centroid_y"))))
             except (TypeError, ValueError):
                 continue
+        return pts
+
+    # Every layer traces to real data: event centroids or static zone
+    # geometry. No baseline/demo blobs — an idle pipeline yields an
+    # empty grid and the UI renders it as such.
+    if layer == "traffic":
+        for cx, cy in _event_centroids(events):
             add_blob(cx, cy, 1.0)
-        # Always inject some baseline traffic in the central corridor for the demo.
-        add_blob(0.5, 0.5, 0.4, sigma=0.18)
     elif layer == "shelf":
+        # Static config visualisation: shelf zone centres from zones.yaml.
         for z in zones:
             if (z.get("kind") or "") == "shelf":
                 xs = [p["x"] for p in z.get("polygon", [])]
@@ -661,19 +717,26 @@ def _heatmap_grid(layer: str, events: list[dict], zones: list[dict], size: int) 
                 if xs and ys:
                     add_blob((min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2, 0.9, sigma=0.07)
     elif layer == "idle":
-        # Inverse of traffic — corners and edges glow.
-        for iy in range(size):
-            for ix in range(size):
-                x = (ix + 0.5) * cell
-                y = (iy + 0.5) * cell
-                grid[iy][ix] = 0.2 + 0.8 * (abs(x - 0.5) + abs(y - 0.5))
+        # Complement of observed traffic — only meaningful once there IS
+        # observed traffic; otherwise stays empty.
+        pts = _event_centroids(events)
+        if pts:
+            for cx, cy in pts:
+                add_blob(cx, cy, 1.0)
+            for iy in range(size):
+                for ix in range(size):
+                    grid[iy][ix] = max(0.0, 1.0 - grid[iy][ix])
     elif layer == "bottleneck":
-        add_blob(0.5, 0.3, 1.0, sigma=0.05)
-        add_blob(0.2, 0.7, 0.7, sigma=0.06)
+        # Where things actually pile up: stationary / falling / anomaly events.
+        slow_types = {"stationary_object", "box_falling", "trajectory_anomaly"}
+        for cx, cy in _event_centroids([e for e in events if e.get("event_type") in slow_types]):
+            add_blob(cx, cy, 1.0, sigma=0.06)
     elif layer == "worker":
-        add_blob(0.3, 0.5, 0.8)
-        add_blob(0.7, 0.5, 0.6)
-        add_blob(0.5, 0.2, 0.5)
+        # Person-class events only.
+        for cx, cy in _event_centroids(
+            [e for e in events if (e.get("payload") or {}).get("class_name") == "person"]
+        ):
+            add_blob(cx, cy, 1.0)
 
     # Normalize 0..1.
     vmax = max((max(row) for row in grid), default=0.0)
@@ -711,14 +774,15 @@ def get_heatmap(
     }
 
 
-def _stub_insight_chains(events: list[dict], now_ms: int) -> list[dict]:
-    """Synthesize narrative insight chains from recent events.
+def _insight_chains(
+    events: list[dict], now_ms: int, snapshots: list[dict] | None = None
+) -> list[dict]:
+    """Derive narrative insight chains from recent events.
 
-    For each detected congestion forecast we craft an A→B→C story. When
-    there are no signals we still surface a couple of demo chains so the
-    rail isn't empty during a soutenance.
+    Every chain traces to a real congestion/collision signal — when there
+    are none, the rail renders its empty state (no demo fallback).
     """
-    derived = _predict_from_events(events, now_ms)
+    derived = _predict_from_events(events, now_ms, snapshots)
     chains: list[dict] = []
 
     for c in derived["congestion"][:3]:
@@ -729,7 +793,7 @@ def _stub_insight_chains(events: list[dict], now_ms: int) -> list[dict]:
             {
                 "id": chain_id,
                 "title": f"Congestion prévue dans {zone.replace('_', ' ').title()}",
-                "outcome": "Délai réduit estimé: 28 %",
+                "outcome": f"Densité prédite {int(c['density'] * 100)} % — reroutage conseillé",
                 "severity": "warning",
                 "timestamp_ms": c["timestamp_ms"],
                 "steps": [
@@ -791,36 +855,8 @@ def _stub_insight_chains(events: list[dict], now_ms: int) -> list[dict]:
             }
         )
 
-    if not chains:
-        # Demo fallback so the rail always has content for screenshots.
-        chains.append(
-            {
-                "id": "ic-demo-1",
-                "title": "Pic d'activité prévu en zone Réception",
-                "outcome": "Effectifs additionnels recommandés (+2)",
-                "severity": "info",
-                "timestamp_ms": now_ms,
-                "steps": [
-                    {
-                        "label": "Historique d'arrivages analysé",
-                        "status": "done",
-                        "ts_ms": now_ms - 60_000,
-                    },
-                    {
-                        "label": "Modèle saisonnier déclenché",
-                        "status": "done",
-                        "ts_ms": now_ms - 45_000,
-                    },
-                    {
-                        "label": "Pic anticipé à 14h30 (+38 %)",
-                        "status": "done",
-                        "ts_ms": now_ms - 30_000,
-                    },
-                    {"label": "Notification superviseur", "status": "pending", "ts_ms": None},
-                ],
-            }
-        )
-
+    # No fabricated fallback chain: an empty list means the rail renders
+    # its "no insights yet" state (no-fake-data principle).
     chains.sort(key=lambda c: c["timestamp_ms"], reverse=True)
     return chains
 
@@ -829,5 +865,6 @@ def _stub_insight_chains(events: list[dict], now_ms: int) -> list[dict]:
 def list_insights(n: int = 10) -> dict:
     events, degraded = _peek_topic(KAFKA_EVENTS_TOPIC, n=300, timeout_s=0.5)
     now_ms = int(time.time() * 1000)
-    chains = _stub_insight_chains(events, now_ms)
+    snapshots, _ = _peek_topic(KAFKA_OCCUPANCY_TOPIC, n=2500, timeout_s=1.0)
+    chains = _insight_chains(events, now_ms, snapshots)
     return {"insights": chains[:n], "degraded": degraded}

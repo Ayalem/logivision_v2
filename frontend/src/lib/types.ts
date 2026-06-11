@@ -16,10 +16,14 @@ export interface Zone {
   name: string
   kind: ZoneKind
   category: string
-  occupancy: number       // 0-100
+  /** 0-100 from the latest real zone-occupancy snapshot, or null when
+   *  the pipeline hasn't produced one yet (UI renders an em-dash). */
+  occupancy: number | null
   capacity: number
-  currentItems: number
-  status: 'normal' | 'warning' | 'critical'
+  currentItems: number | null
+  status: 'normal' | 'warning' | 'critical' | 'unknown'
+  /** true when occupancy traces to a real CEP snapshot. */
+  live: boolean
   x: number; y: number; width: number; height: number  // % bbox
   polygon: ZonePolygonPoint[]                          // 0..1 coords
   lastUpdated: string
@@ -96,10 +100,10 @@ export interface LiveEvent {
 
 // Prediction event types — backend emits these from /api/predictions.
 //
-// `forecast_source` tells the UI whether to render the "LSTM · PRSA" badge
+// `forecast_source` tells the UI whether to render the "LSTM · Birmingham" badge
 // (model is loaded and produced the number) or the "rule v0" badge (the
 // model artifact is missing and the heuristic ran instead).
-export type ForecastSource = 'lstm-prsa-v1' | 'rule-v0'
+export type ForecastSource = 'lstm-birmingham-v2' | 'rule-v0'
 
 export interface CongestionForecast {
   event_type: 'congestion_forecast'

@@ -39,8 +39,9 @@ export function colorForZoneKind(kind: string): string {
   return PALETTE.shelf
 }
 
-/** Color for occupancy bucket. */
-export function colorForOccupancy(pct: number): string {
+/** Color for occupancy bucket. `null` (no real snapshot yet) → slate. */
+export function colorForOccupancy(pct: number | null): string {
+  if (pct === null) return '#64748B'
   if (pct >= 90) return '#EF4444'
   if (pct >= 70) return '#F59E0B'
   if (pct >= 50) return '#06B6D4'

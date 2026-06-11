@@ -175,7 +175,7 @@ export function DigitalTwin() {
           <div className="grid grid-cols-2 gap-2 text-[11px]">
             <Cell label="Catégorie" value={selected.category} />
             <Cell label="Type" value={selected.kind} />
-            <Cell label="Occupation" value={`${selected.occupancy}%`} accent={colorForOccupancy(selected.occupancy)} />
+            <Cell label="Occupation" value={selected.occupancy === null ? '—' : `${selected.occupancy}%`} accent={colorForOccupancy(selected.occupancy)} />
             <Cell label="Capacité" value={String(selected.capacity)} />
             <Cell label="Articles" value={String(selected.currentItems)} />
             <Cell label="Statut" value={selected.status} />
