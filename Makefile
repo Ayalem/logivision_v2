@@ -9,7 +9,7 @@ COMPOSE_DIR := infra/docker-compose
 COMPOSE_FILE := $(COMPOSE_DIR)/docker-compose.mlops.yml
 COMPOSE_CVAT := $(COMPOSE_DIR)/docker-compose.cvat.yml
 
-.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean camera-videos qr-decoder register-from-colab worker-restart
+.PHONY: help install lint format test test-integration test-cov up down clean train eval pre-commit-install bootstrap dvc-push dvc-pull dvc-status pipeline pipeline-dag cvat-up cvat-down cvat-clean demo demo-stop demo-logs demo-data promote promote-prod export-openvino benchmark compare-archs fetch-videos serve serve-build load-test fetch-kaggle drift kafka-up kafka-down kafka-clean inference-worker frame-grabber cep api frontend-install frontend-dev frontend-build frontend-clean camera-videos qr-decoder register-from-colab worker-restart
 
 help: ## Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -82,6 +82,15 @@ cvat-down: ## Stop CVAT (volumes preserved)
 cvat-clean: ## Stop CVAT AND wipe its volumes (asks for confirmation)
 	@read -p "This will DELETE all CVAT annotations / users / jobs. Type 'yes' to continue: " ans && [ "$$ans" = "yes" ]
 	docker compose -f $(COMPOSE_CVAT) down --volumes --remove-orphans
+
+demo: ## Start the full LOGIVISION pipeline (API + grabber + worker + CEP). Logs → /tmp/logivision-demo-logs/
+	@chmod +x scripts/start_demo.sh && ./scripts/start_demo.sh
+
+demo-stop: ## Stop all demo processes started by `make demo`
+	@chmod +x scripts/stop_demo.sh && ./scripts/stop_demo.sh
+
+demo-logs: ## Tail all demo service logs
+	@tail -f /tmp/logivision-demo-logs/*.log
 
 demo-data: ## Generate a synthetic CVAT-style YOLO export at datasets/raw/annotations.zip
 	$(UV) run python scripts/gen_synthetic_demo.py

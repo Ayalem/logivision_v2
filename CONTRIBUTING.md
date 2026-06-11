@@ -49,7 +49,7 @@ The template (`.github/pull_request_template.md`) is required. In short:
 - [ ] New services expose `/health` and `/metrics`, log JSON.
 - [ ] No secret in clear; Trivy scan: `CRITICAL=0`, `HIGH<5`.
 - [ ] Screenshot / GIF if UI-visible change.
-- [ ] `docs/PROGRESS.md` updated.
+- [ ] `ONBOARDING.md` updated if architecture or services changed.
 
 ## Branch protection settings (recommended)
 

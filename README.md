@@ -6,7 +6,8 @@ The full execution plan — phases, sprints, acceptance criteria, technology cho
 
 ## Current status
 
-Phase 1 (MLOps Computer Vision) — **Sprint 1.1 in progress**. See [`docs/PROGRESS.md`](docs/PROGRESS.md).
+Phase 1 complete — YOLO+ByteTrack detector (mAP@0.5=0.995), LSTM congestion forecaster (+5.4% RMSE over persistence), real-time Kafka CEP pipeline, and live React dashboard deployed.
+Read [`ONBOARDING.md`](ONBOARDING.md) for the full technical reference and setup guide.
 
 ## Constraints
 
@@ -19,19 +20,19 @@ Phase 1 (MLOps Computer Vision) — **Sprint 1.1 in progress**. See [`docs/PROGR
 Requires Python 3.11, Docker, and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-make install              # install Python dev deps
-make pre-commit-install   # install Git hooks
-make bootstrap            # boot local MLOps stack (PostgreSQL + MinIO + MLflow)
-make test-integration     # 4 smoke tests against the running stack
-make down                 # stop the stack (volumes persist; `make clean` to wipe)
+make bootstrap   # boot the MLOps stack (Kafka + MinIO + MLflow + Postgres)
+make demo        # start API + frame grabber + inference worker + CEP in one shot
+# Dashboard → http://localhost:8000  (admin view)
+# MLflow    → http://localhost:5050
+# Kafka UI  → http://localhost:8086
+make demo-stop   # tear everything down
 ```
 
-UIs: MLflow `http://localhost:5050` · MinIO Console `http://localhost:9001`.
 Run `make help` for the full list of targets.
 
 ## Layout
 
-See the monorepo structure in [`PROJECT_PLAN.md` §4](PROJECT_PLAN.md). Directories appear as their corresponding sprint lands; the repo is intentionally minimal until then.
+See the monorepo structure and architecture in [`ONBOARDING.md`](ONBOARDING.md).
 
 ## License
 
