@@ -26,7 +26,8 @@ Plus:
 00 ─→ initial YOLO training         (Colab T4 ~25 min)     produces v1
 03 ─→ inference + SAM demo          (verification visual)   for soutenance
 04 ─→ evaluation on hand-labels     (TODO Day 2)            gating criterion
-05 ─→ congestion LSTM (UCI PRSA)    (~5 min CPU)            ml/artifacts/congestion_lstm/
+04 ─→ model evaluation (quant+qual)  (~5 min, no GPU)        ml/artifacts/eval/
+05 ─→ congestion LSTM (Birmingham)  (~5 min CPU)            ml/artifacts/congestion_lstm/
 06 ─→ 2-Phase ULMFiT fine-tune      (Colab T4 ~30 min)     produces v2
 07 ─→ Noisy Student teacher→student (Colab T4 ~45 min)     produces v3, v4, …
 ```
@@ -56,7 +57,12 @@ Plus:
    make worker-restart
    ```
 
-**Current best**: mAP@0.5 = **0.995** on the local 50-epoch run.
+**Current model (v3)**: mAP@0.5=0.995 — **this is inflated** by temporal leakage
+in the original Kaggle split (Roboflow shuffled adjacent video frames across
+train/test). The scene-aware split fix is already in the notebook code
+(`scripts/reshuffle_splits_by_scene.py`). **Retrain to get honest numbers** —
+expected real mAP is 0.70–0.85 on genuinely unseen test scenes. See notebook 04
+for the evaluation on the clean split.
 
 ### 03 — Inference demo + SAM (verification)
 
@@ -70,35 +76,38 @@ model works in real time, with screenshots for the defense slides.
 **How**: `make jupyter` → open
 `ml/notebooks/03_inference_and_sam.ipynb` → Run all (~3 min).
 
-### 04 — Accuracy evaluation on hand-labelled GT (gating)
+### 04 — Model evaluation (quantitative + qualitative)
 
-**Status**: TODO (Day 2 plan). Will load the current Production
-YOLO + ByteTrack + CEP pipeline, run on a hand-labelled 30-s clip,
-report mAP / MOTA / IDF1 / entry-exit P/R / QR decode rate.
+**Status**: Implemented. Run locally or on Colab (no GPU needed for eval).
 
-**Production artifact**: `ml/artifacts/eval_report.json` consumed by
-`services/api/routers/client.py` to drive the Système page's
-accuracy section. **Gates** all model promotions:
-`make register-from-colab` will refuse to promote a model that
-regresses on this benchmark.
+**Part A** — quantitative: runs `model.val()` on the scene-aware clean
+Kaggle test split. Reports mAP@0.5, mAP@0.5:0.95, precision, recall per
+class. Saves `ml/artifacts/eval/quantitative.json`.
 
-### 05 — Congestion LSTM (UCI PRSA)
+**Part B** — qualitative: samples 100 frames from Camera3.mp4, runs
+inference, shows detection visualisations and a detection-rate summary.
+No ground-truth labels needed. Saves `ml/artifacts/eval/qualitative.json`.
+
+**MOTA / IDF1** (full tracking evaluation) requires a hand-annotated
+sequence and is scoped as Future Work.
+
+**How**: `make jupyter` → open `04_model_evaluation.ipynb` → Run all.
+Or on Colab: open from GitHub.
+
+### 05 — Congestion LSTM (Parking Birmingham)
 
 **Production artifact**: `ml/artifacts/congestion_lstm/model.pt`
-(trained on UCI Beijing Multi-Site Air-Quality — public 33 MB
-dataset, transferred to warehouse zone occupancy).
+trained on the **Parking Birmingham** dataset (Stolfi 2017 / UCI) — 32
+parking lots across Birmingham UK, half-hourly occupancy ratio,
+Oct–Dec 2016. Direct domain transfer: multi-location bounded-count
+time series with diurnal/weekly patterns, same as warehouse zones.
 
 **Used by**: `services/api/_lstm_inference.py::forecast_zone_occupancy()`
 loads it at API startup. The dashboard's **Congestion** panel header
-flips the badge to `LSTM · PRSA · v1` when the trained model produced
-the forecast (vs `rule v0` when it fell back).
+flips the badge to `LSTM · Birmingham-transferred · v1`.
 
 **How**: `make jupyter` → open `05_congestion_lstm.ipynb` → Run all
-(~5 min CPU). Notebook is also committed pre-executed with plots
-embedded.
-
-**Current**: +5.4% RMSE improvement over persistence baseline at the
-+3h horizon.
+(~5 min CPU, no GPU needed).
 
 ### 06 — 2-Phase ULMFiT fine-tune (Colab T4)
 
@@ -139,15 +148,17 @@ inside the notebook). On rerun: `v4`, `v5`, …
 4. Evaluate student vs teacher on held-out Kaggle test.
 5. Promote student to Production ONLY if `student_wins=True`.
 
+**Unlabeled data source**: `machowe/warehouse-object-detection-dataset`
+(Kaggle) — a second, different-distribution warehouse dataset. This is
+the correct Noisy Student setup: unlabeled frames from a *different*
+domain force the student to generalise, not just memorise the teacher's
+outputs on its training images.
+
 **Continual production loop** — re-run weekly:
-- New unlabeled warehouse video gets added to
-  `datasets/raw/pexels_warehouse/` (or any folder you point cell 5
-  at).
-- Each iteration uses the current Production model as the new
-  teacher.
-- The dataset effectively grows each run; the student keeps
-  improving past what 361 hand-labeled Kaggle images alone could
-  achieve.
+- In production, new RTSP camera dumps replace the Kaggle unlabeled set.
+- Each iteration uses the current Production model as the new teacher.
+- The dataset effectively grows each run; the student keeps improving
+  past what 361 hand-labeled Kaggle images alone could achieve.
 
 **How**: same Colab workflow, picks
 `ml/notebooks/07_noisy_student.ipynb`. Read the gating output before
@@ -169,8 +180,9 @@ make bootstrap                # MLflow + MinIO + Postgres
 make kafka-up                 # Kafka KRaft
 
 # 2. Initial YOLO training. Pick one:
-#    (a) FAST: register the existing local 99.5%-mAP run:
-make register-from-colab RUN=8a4db577ff1e4abf9c8276cdd6967bb7
+#    (a) Register after running notebook 00 on Colab (honest mAP on clean split):
+make register-from-colab RUN=00_colab
+#       (v3 mAP=0.995 is on the contaminated split — do NOT use for paper claims)
 #    (b) FRESH: open ml/notebooks/00_colab_training.ipynb on Colab T4,
 #        run all, then `make register-from-colab RUN=00_colab`.
 
@@ -227,5 +239,5 @@ make cvat-up                  # http://localhost:8080
 | `pip install services` ran and broke things | That's an unrelated PyPI package — `pip uninstall services`. The fix is the `sys.path` insert. |
 | Worker logs `fallback:yolov8n.pt` | MLflow has no Production version. Run `make register-from-colab RUN=<dir>`. |
 | Notebook 07 says `student_wins=false` | Don't promote. Either pseudo-label confidence threshold was too low (try 0.7) or the unlabeled frames were too out-of-distribution. Iterate. |
-| Notebook 07 cell 5 says "0 source videos" on Colab | The repo clone is shallow and `datasets/raw/pexels_warehouse/` is gitignored. Cell 5 automatically falls back to using Kaggle val images as pseudo-input — this still works, just less in-domain. |
+| Notebook 07 cell 5 fails on `machowe/warehouse-object-detection-dataset` | Add `KAGGLE_USERNAME` + `KAGGLE_KEY` as Colab Secrets (same as notebooks 00/06). The dataset is ~200 MB and downloads automatically via kagglehub. |
 | `pyzbar` fails on macOS | `brew install zbar && export DYLD_LIBRARY_PATH=/opt/homebrew/opt/zbar/lib`. `make qr-decoder` handles this automatically. |

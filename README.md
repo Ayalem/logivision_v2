@@ -6,7 +6,7 @@ The full execution plan — phases, sprints, acceptance criteria, technology cho
 
 ## Current status
 
-Phase 1 complete — YOLO+ByteTrack detector (mAP@0.5=0.995), LSTM congestion forecaster (+5.4% RMSE over persistence), real-time Kafka CEP pipeline, and live React dashboard deployed.
+Phase 1 complete — YOLO+ByteTrack detector (retrain on clean split: run notebook 00), LSTM congestion forecaster on Parking Birmingham occupancy data, real-time Kafka CEP pipeline, and live React dashboard.
 Read [`ONBOARDING.md`](ONBOARDING.md) for the full technical reference and setup guide.
 
 ## Constraints
