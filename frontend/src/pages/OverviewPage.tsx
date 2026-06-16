@@ -6,11 +6,12 @@ import { useCameras } from '@/lib/api'
 import { AnalyticalCameraFeed } from '@/components/cameras/AnalyticalCameraFeed'
 import { KpiStrip } from '@/components/dashboard/KpiStrip'
 import { DigitalTwin } from '@/components/digital-twin/DigitalTwin'
-import { InsightRail } from '@/components/insights/InsightChain'
 import { CongestionPanel } from '@/components/predictions/CongestionPanel'
 import { AlertCircle, TrendingUp, Activity } from 'lucide-react'
+import { useTranslation } from '@/lib/i18n'
 
 export function OverviewPage() {
+  const { t } = useTranslation()
   const { data: cams } = useCameras()
   const cameras = cams?.cameras ?? []
 
@@ -34,7 +35,7 @@ export function OverviewPage() {
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-coral" />
-                Live Alerts
+                {t('liveAlerts')}
               </h3>
               <span className="text-xs text-muted-foreground">View all</span>
             </div>

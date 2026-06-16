@@ -1,58 +1,132 @@
-import { useEffect, useState } from 'react'
-import { Bell, RefreshCw, Search, Settings, User, ChevronDown, LogOut, UserCircle, Cog } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Bell, RefreshCw, Search, Globe, Check, AlertCircle, AlertTriangle, Info, X, Command, User, Settings as SettingsIcon, LogOut } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppStore, type ViewType } from '@/lib/store'
-import { useMe } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useTranslation, type Language } from '@/lib/i18n'
 
-const TITLES: Record<ViewType, { title: string; sub: string }> = {
-  overview:  { title: "Vue d'ensemble",  sub: 'Détection · Prédiction · Réaction en temps réel' },
-  entries:   { title: 'Entrées / Sorties', sub: 'Flux quotidien sur les quais' },
-  zones:     { title: 'Zones',           sub: 'Occupation, statut, catégories' },
-  anomalies: { title: 'Anomalies',       sub: 'Événements warning + critical' },
-  cameras:   { title: 'Caméras',         sub: 'Vues analytiques temps réel' },
-  system:    { title: 'Système',         sub: 'MLflow runs · drift · benchmarks' },
-  analytics: { title: 'Analyses',        sub: 'Indicateurs de performance et statistiques' },
-  inventory: { title: 'Inventaire',      sub: 'Gestion des stocks et emplacements' },
-  workforce: { title: 'Personnel',       sub: 'Suivi de la productivité et sécurité' },
+const TITLES: Record<ViewType, { titleKey: string; subKey: string }> = {
+  overview:  { titleKey: "overview",  subKey: 'overviewSub' },
+  entries:   { titleKey: 'entries', subKey: 'entriesSub' },
+  zones:     { titleKey: 'zones',           subKey: 'zonesSub' },
+  anomalies: { titleKey: 'alerts',       subKey: 'anomaliesSub' },
+  cameras:   { titleKey: 'cameras',         subKey: 'camerasSub' },
+  system:    { titleKey: 'system',         subKey: 'systemSub' },
+  'ml-monitoring': { titleKey: 'mlMonitoring', subKey: 'mlMonitoringSub' },
+  analytics: { titleKey: 'analytics',        subKey: 'analyticsSub' },
+  inventory: { titleKey: 'inventory',      subKey: 'inventorySub' },
+  workforce: { titleKey: 'workforce',       subKey: 'workforceSub' },
+  settings:  { titleKey: 'settings', subKey: 'settingsSub' },
+  profile:   { titleKey: 'profile',   subKey: 'profileSub' },
+  'activity-log': { titleKey: 'activityLog', subKey: 'activityLogSub' },
+  tasks: { titleKey: 'myTasks', subKey: 'myTasksSub' },
 }
 
+// Mock search data
+const SEARCH_RESULTS = [
+  { id: 'ORD-5521', name: 'Order #5521', category: 'Orders', zone: 'Zone A-1' },
+  { id: 'ORD-5522', name: 'Order #5522', category: 'Orders', zone: 'Zone B-2' },
+  { id: 'FL-004', name: 'Forklift FL-004', category: 'Alerts', zone: 'Zone C-3' },
+  { id: 'AL-99', name: 'Critical Obstruction', category: 'Alerts', zone: 'Zone A-2' },
+  { id: 'WK-12', name: 'John Doe', category: 'Workforce', zone: 'Zone B-4' },
+  { id: 'WK-15', name: 'Sarah Smith', category: 'Workforce', zone: 'Zone A-1' },
+]
+
 export function Header() {
+  const { t, lang, setLang } = useTranslation()
   const view = useAppStore((s) => s.currentView)
-  const wsState = useAppStore((s) => s.live.wsState)
+  const setView = useAppStore((s) => s.setView)
   const events = useAppStore((s) => s.live.events)
   const qc = useQueryClient()
-  const meta = TITLES[view]
-  const me = useMe()
-  const role = me.data?.role ?? 'operator'
-  const userName = me.data?.name ?? role
+  const userRole = useAppStore((s) => s.userRole)
+  const role = userRole ?? 'worker'
   
   const [now, setNow] = useState(new Date())
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
+  const [langOpen, setLangOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  
+  // Search state
+  const [searchExpanded, setSearchExpanded] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(id)
   }, [])
 
-  const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  // Keyboard shortcut Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setSearchExpanded(true)
+        setTimeout(() => searchInputRef.current?.focus(), 100)
+      }
+      if (e.key === 'Escape') {
+        setSearchExpanded(false)
+        setSearchQuery('')
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
 
-  // Filter events by severity for notifications
-  const criticalAlerts = events.filter(e => e.severity === 'critical')
-  const warningAlerts = events.filter(e => e.severity === 'warning')
-  const infoAlerts = events.filter(e => e.severity === 'info')
+  // Click outside to close search
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setSearchExpanded(false)
+        setSearchQuery('')
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
-  const handleLogout = () => {
-    useAppStore.getState().logout()
-    setSettingsOpen(false)
-  }
+  useEffect(() => {
+    if (searchQuery.trim().length > 1) {
+      const filtered = SEARCH_RESULTS.filter(item => 
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.zone.toLowerCase().includes(searchQuery.toLowerCase())
+      ).slice(0, 6)
+      setSearchResults(filtered)
+    } else {
+      setSearchResults([])
+    }
+  }, [searchQuery])
 
-  const handleRefresh = () => {
+  const dateStr = now.toLocaleDateString(lang === 'ar' ? 'ar-SA' : lang === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  const timeStr = now.toLocaleTimeString(lang === 'ar' ? 'ar-SA' : lang === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+
+  const languages = [
+    { code: 'en' as Language, label: 'English', flag: '🇬🇧' },
+    { code: 'fr' as Language, label: 'Français', flag: '🇫🇷' },
+    { code: 'ar' as Language, label: 'العربية', flag: '🇸🇦' },
+  ]
+
+  const handleRefresh = (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    setRefreshing(true)
     qc.invalidateQueries()
+    setTimeout(() => setRefreshing(false), 1000)
   }
+
+  const groupedResults = searchResults.reduce((acc: any, item) => {
+    if (!acc[item.category]) acc[item.category] = []
+    acc[item.category].push(item)
+    return acc
+  }, {})
+
+  const logout = useAppStore((s) => s.logout)
 
   return (
     <header className="sticky top-0 z-20 glass border-b border-border/50">
@@ -61,259 +135,261 @@ export function Header() {
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-card/40 hover:bg-card/60 transition-colors text-sm font-medium">
-              <span>Warehouse</span>
+              <span>{t('warehouse')}</span>
               <span className="text-xs text-muted-foreground">Alpha-01</span>
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           </div>
-          <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
+          <div className="hidden lg:flex items-center gap-4 text-xs text-muted-foreground font-mono">
             <div>
-              <span className="text-muted-foreground">DATE</span>
+              <span className="text-muted-foreground">{t('date')}</span>
               <div className="text-foreground font-semibold">{dateStr}</div>
             </div>
             <div>
-              <span className="text-muted-foreground">TIME</span>
+              <span className="text-muted-foreground">{t('time')}</span>
               <div className="text-foreground font-semibold">{timeStr}</div>
             </div>
           </div>
         </div>
 
-        {/* Right: System status, alerts, and controls */}
+        {/* Right: System status, search, and controls */}
         <div className="flex items-center gap-3">
           {/* System Status */}
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald/10 border border-emerald/30">
+          <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald/10 border border-emerald/30">
             <div className="h-2 w-2 rounded-full bg-emerald animate-pulse" />
-            <span className="text-xs font-semibold text-emerald">SYSTEM STATUS</span>
-            <span className="text-xs text-emerald/80">AI ACTIVE</span>
+            <span className="text-xs font-semibold text-emerald">{t('systemStatus')}</span>
           </div>
 
-          {/* Search */}
-          <button className="p-2 rounded-lg hover:bg-card/60 transition-colors text-muted-foreground hover:text-foreground">
-            <Search className="h-4 w-4" />
-          </button>
+          {/* Search Functional */}
+          <div ref={searchContainerRef} className="relative flex items-center">
+            <div className={cn(
+              "flex items-center bg-card/40 border border-border/50 rounded-lg transition-all duration-300 overflow-hidden",
+              searchExpanded ? "w-[280px] px-3" : "w-10 px-0 justify-center border-transparent hover:bg-card/60"
+            )}>
+              <Search 
+                className={cn("h-4 w-4 text-muted-foreground cursor-pointer shrink-0", !searchExpanded && "hover:text-foreground")} 
+                onClick={() => {
+                  setSearchExpanded(true)
+                  setTimeout(() => searchInputRef.current?.focus(), 100)
+                }}
+              />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('searchPlaceholder')}
+                className={cn(
+                  "bg-transparent border-none outline-none text-xs ml-2 w-full transition-opacity duration-200",
+                  searchExpanded ? "opacity-100" : "opacity-0 pointer-events-none"
+                )}
+              />
+              {searchExpanded && (
+                <div className="flex items-center gap-1 shrink-0 ml-1">
+                  <kbd className="hidden sm:inline-flex h-4 items-center gap-1 rounded border border-border/50 bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+                    <span className="text-xs">⌘</span>K
+                  </kbd>
+                  <X 
+                    className="h-3 w-3 text-muted-foreground cursor-pointer hover:text-foreground" 
+                    onClick={() => {
+                      setSearchExpanded(false)
+                      setSearchQuery('')
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Search Results Dropdown */}
+            {searchExpanded && searchResults.length > 0 && (
+              <div className="absolute top-full right-0 mt-2 w-[320px] bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                <div className="max-h-[400px] overflow-y-auto p-2">
+                  {Object.entries(groupedResults).map(([category, items]: [string, any]) => (
+                    <div key={category} className="mb-2 last:mb-0">
+                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                        {category}
+                      </div>
+                      {items.map((item: any) => (
+                        <button
+                          key={item.id}
+                          onClick={() => {
+                            setSearchExpanded(false)
+                            setSearchQuery('')
+                            // Navigation logic would go here
+                          }}
+                          className="w-full flex flex-col gap-0.5 px-3 py-2 rounded-lg hover:bg-foreground/5 transition-colors text-left"
+                        >
+                          <span className="text-xs font-medium">{item.name}</span>
+                          <span className="text-[10px] text-muted-foreground">{item.id} • {item.zone}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Language Selector */}
+          <div className="relative">
+            <button 
+              onClick={() => setLangOpen(!langOpen)}
+              className="p-2 rounded-lg hover:bg-card/60 transition-colors text-muted-foreground hover:text-foreground"
+            >
+              <Globe className="h-4 w-4" />
+            </button>
+            {langOpen && (
+              <div className={cn(
+                "absolute mt-2 w-40 bg-card border border-border/50 rounded-lg shadow-lg overflow-hidden z-50",
+                lang === 'ar' ? "left-0" : "right-0"
+              )}>
+                <ul className="py-1">
+                  {languages.map((l) => (
+                    <li key={l.code}>
+                      <button 
+                        onClick={() => {
+                          setLang(l.code)
+                          setLangOpen(false)
+                        }}
+                        className="w-full px-3 py-2 text-left text-xs hover:bg-foreground/5 transition-colors flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{l.flag}</span>
+                          <span>{l.label}</span>
+                        </div>
+                        {lang === l.code && <Check className="h-3 w-3 text-electric" />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
 
           {/* Refresh */}
           <button 
+            type="button"
             onClick={handleRefresh}
             className="p-2 rounded-lg hover:bg-card/60 transition-colors text-muted-foreground hover:text-foreground"
           >
-            <RefreshCw className="h-4 w-4" />
+            <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
           </button>
 
           {/* Notifications */}
           <div className="relative">
             <button 
+              type="button"
               onClick={() => setNotificationsOpen(!notificationsOpen)}
               className="relative p-2 rounded-lg hover:bg-card/60 transition-colors text-muted-foreground hover:text-foreground"
             >
               <Bell className="h-4 w-4" />
               {events.length > 0 && (
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-coral animate-pulse" />
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-coral border-2 border-background" />
               )}
             </button>
 
-            {/* Notifications Dropdown */}
             {notificationsOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-card border border-border/50 rounded-lg shadow-lg overflow-hidden z-50">
-                <div className="px-4 py-3 border-b border-border/30 bg-card/50">
-                  <h3 className="text-sm font-semibold">Notifications d'alertes</h3>
-                  <p className="text-xs text-muted-foreground mt-1">{events.length} événements</p>
+              <div className={cn(
+                "absolute mt-2 w-80 bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2",
+                lang === 'ar' ? "left-0" : "right-0"
+              )}>
+                <div className="p-4 border-b border-border/30 flex items-center justify-between bg-foreground/[0.02]">
+                  <h3 className="text-xs font-bold uppercase tracking-wider">{t('notifications')}</h3>
+                  <button className="text-[10px] text-electric font-bold hover:underline">{t('markAllAsRead')}</button>
                 </div>
-
-                {events.length === 0 ? (
-                  <div className="px-4 py-6 text-center text-xs text-muted-foreground">
-                    Aucune alerte pour le moment
-                  </div>
-                ) : (
-                  <div className="max-h-96 overflow-y-auto">
-                    {/* Critical Alerts */}
-                    {criticalAlerts.length > 0 && (
-                      <>
-                        <div className="px-4 py-2 bg-coral/5 border-b border-border/30">
-                          <p className="text-xs font-semibold text-coral uppercase">Critiques ({criticalAlerts.length})</p>
+                <div className="max-h-[350px] overflow-y-auto">
+                  {events.length > 0 ? (
+                    <div className="divide-y divide-border/30">
+                      {events.slice(0, 10).map((event, i) => (
+                        <div key={i} className="p-4 hover:bg-foreground/[0.02] transition-colors cursor-pointer group">
+                          <div className="flex gap-3">
+                            <div className={cn(
+                              "mt-1 h-2 w-2 rounded-full shrink-0",
+                              event.severity === 'critical' ? "bg-coral shadow-[0_0_8px_rgba(244,63,94,0.4)]" : 
+                              event.severity === 'warning' ? "bg-amber" : "bg-electric"
+                            )} />
+                            <div className="space-y-1">
+                              <p className="text-xs font-medium leading-tight group-hover:text-electric transition-colors">
+                                {event.event_type.replace(/_/g, ' ')} in {event.zone}
+                              </p>
+                              <p className="text-[10px] text-muted-foreground">
+                                {new Date(event.timestamp_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                          </div>
                         </div>
-                        <ul className="divide-y divide-border/30">
-                          {criticalAlerts.slice(0, 3).map((evt) => (
-                            <li key={evt.event_id} className="px-4 py-2 hover:bg-foreground/5 transition-colors">
-                              <div className="flex items-start gap-2">
-                                <div className="h-2 w-2 rounded-full bg-coral mt-1 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-coral truncate">{evt.event_type}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                                    {new Date(evt.timestamp_ms).toLocaleTimeString('fr-FR')}
-                                  </p>
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-
-                    {/* Warning Alerts */}
-                    {warningAlerts.length > 0 && (
-                      <>
-                        <div className="px-4 py-2 bg-amber/5 border-b border-border/30">
-                          <p className="text-xs font-semibold text-amber uppercase">Avertissements ({warningAlerts.length})</p>
-                        </div>
-                        <ul className="divide-y divide-border/30">
-                          {warningAlerts.slice(0, 3).map((evt) => (
-                            <li key={evt.event_id} className="px-4 py-2 hover:bg-foreground/5 transition-colors">
-                              <div className="flex items-start gap-2">
-                                <div className="h-2 w-2 rounded-full bg-amber mt-1 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-amber truncate">{evt.event_type}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                                    {new Date(evt.timestamp_ms).toLocaleTimeString('fr-FR')}
-                                  </p>
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-
-                    {/* Info Alerts */}
-                    {infoAlerts.length > 0 && (
-                      <>
-                        <div className="px-4 py-2 bg-teal/5 border-b border-border/30">
-                          <p className="text-xs font-semibold text-teal uppercase">Informations ({infoAlerts.length})</p>
-                        </div>
-                        <ul className="divide-y divide-border/30">
-                          {infoAlerts.slice(0, 3).map((evt) => (
-                            <li key={evt.event_id} className="px-4 py-2 hover:bg-foreground/5 transition-colors">
-                              <div className="flex items-start gap-2">
-                                <div className="h-2 w-2 rounded-full bg-teal mt-1 flex-shrink-0" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs font-medium text-teal truncate">{evt.event_type}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-0.5">
-                                    {new Date(evt.timestamp_ms).toLocaleTimeString('fr-FR')}
-                                  </p>
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                <div className="px-4 py-2 border-t border-border/30 bg-card/50">
-                  <button className="w-full text-xs text-center text-muted-foreground hover:text-foreground transition-colors py-1">
-                    Voir toutes les alertes →
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-12 px-4 text-center">
+                      <div className="h-12 w-12 rounded-full bg-muted/20 flex items-center justify-center mx-auto mb-3">
+                        <Bell className="h-6 w-6 text-muted-foreground/40" />
+                      </div>
+                      <p className="text-xs text-muted-foreground">{t('noAlerts')}</p>
+                    </div>
+                  )}
+                </div>
+                <div className="p-3 border-t border-border/30 text-center bg-foreground/[0.01]">
+                  <button 
+                    onClick={() => { setView('anomalies'); setNotificationsOpen(false); }}
+                    className="text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t('viewAllAlerts')}
                   </button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Settings */}
-          <div className="relative">
+          {/* User Profile Menu */}
+          <div className="relative ml-2 border-l border-border/30 pl-3">
             <button 
-              onClick={() => setSettingsOpen(!settingsOpen)}
-              className="p-2 rounded-lg hover:bg-card/60 transition-colors text-muted-foreground hover:text-foreground"
+              onClick={() => setUserMenuOpen(!userMenuOpen)}
+              className="flex items-center gap-2 p-1 rounded-full hover:bg-card/60 transition-colors border border-transparent hover:border-border/50"
             >
-              <Settings className="h-4 w-4" />
-            </button>
-
-            {/* Settings Dropdown */}
-            {settingsOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-card border border-border/50 rounded-lg shadow-lg overflow-hidden z-50">
-                <div className="px-4 py-2 border-b border-border/30 bg-card/50">
-                  <p className="text-xs font-semibold">Paramètres</p>
-                </div>
-                <ul className="divide-y divide-border/30">
-                  <li>
-                    <button className="w-full px-4 py-2 text-left text-xs hover:bg-foreground/5 transition-colors flex items-center gap-2">
-                      <Cog className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>Préférences</span>
-                    </button>
-                  </li>
-                  <li>
-                    <button className="w-full px-4 py-2 text-left text-xs hover:bg-foreground/5 transition-colors flex items-center gap-2">
-                      <UserCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>Compte</span>
-                    </button>
-                  </li>
-                  <li className="border-t border-border/30">
-                    <button 
-                      onClick={handleLogout}
-                      className="w-full px-4 py-2 text-left text-xs hover:bg-coral/10 transition-colors flex items-center gap-2 text-coral"
-                    >
-                      <LogOut className="h-3.5 w-3.5" />
-                      <span>Déconnexion</span>
-                    </button>
-                  </li>
-                </ul>
+              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-electric/20 to-teal/20 flex items-center justify-center text-electric border border-electric/30">
+                <User className="h-4 w-4" />
               </div>
-            )}
-          </div>
-
-          {/* User profile */}
-          <div className="relative">
-            <button 
-              onClick={() => setProfileOpen(!profileOpen)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-card/60 transition-colors"
-            >
-              <div className="h-6 w-6 rounded-full bg-gradient-to-br from-electric/20 to-teal/20 border border-electric/30 flex items-center justify-center">
-                <User className="h-3.5 w-3.5 text-electric" />
-              </div>
-              <span className="text-xs font-medium capitalize">{role}</span>
             </button>
-
-            {/* Profile Dropdown */}
-            {profileOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-card border border-border/50 rounded-lg shadow-lg overflow-hidden z-50">
-                <div className="px-4 py-4 border-b border-border/30 bg-card/50">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-electric/20 to-teal/20 border border-electric/30 flex items-center justify-center">
-                      <User className="h-5 w-5 text-electric" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate capitalize">{userName}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{role}</p>
-                    </div>
-                  </div>
+            
+            {userMenuOpen && (
+              <div className={cn(
+                "absolute mt-2 w-56 bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2",
+                lang === 'ar' ? "left-0" : "right-0"
+              )}>
+                <div className="p-3 border-b border-border/30 bg-foreground/[0.02]">
+                  <p className="text-xs font-bold">{role === 'admin' ? 'Administrator' : 'Operator'}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">operator@logivision.ai</p>
                 </div>
-
-                <ul className="divide-y divide-border/30">
-                  <li>
-                    <button className="w-full px-4 py-2 text-left text-xs hover:bg-foreground/5 transition-colors flex items-center gap-2">
-                      <UserCircle className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>Mon profil</span>
-                    </button>
-                  </li>
-                  <li>
-                    <button className="w-full px-4 py-2 text-left text-xs hover:bg-foreground/5 transition-colors flex items-center gap-2">
-                      <Cog className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span>Paramètres du compte</span>
-                    </button>
-                  </li>
-                </ul>
-
-                <div className="px-4 py-2 border-t border-border/30 bg-card/50 text-[10px] text-muted-foreground">
-                  <p>Connecté depuis</p>
-                  <p className="font-mono mt-1">{now.toLocaleString('fr-FR')}</p>
+                <div className="p-1.5">
+                  <button 
+                    onClick={() => { setView('profile'); setUserMenuOpen(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs hover:bg-foreground/5 transition-colors"
+                  >
+                    <User className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>{t('myProfile')}</span>
+                  </button>
+                  <button 
+                    onClick={() => { setView('settings'); setUserMenuOpen(false); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs hover:bg-foreground/5 transition-colors"
+                  >
+                    <SettingsIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span>{t('accountSettings')}</span>
+                  </button>
+                </div>
+                <div className="p-1.5 border-t border-border/30">
+                  <button 
+                    onClick={() => logout()}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-coral hover:bg-coral/10 transition-colors"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                    <span>{t('logout')}</span>
+                  </button>
                 </div>
               </div>
             )}
           </div>
         </div>
       </div>
-
-      {/* Close dropdowns when clicking outside */}
-      {(settingsOpen || profileOpen || notificationsOpen) && (
-        <div 
-          className="fixed inset-0 z-40"
-          onClick={() => {
-            setSettingsOpen(false)
-            setProfileOpen(false)
-            setNotificationsOpen(false)
-          }}
-        />
-      )}
     </header>
   )
 }

@@ -4,7 +4,7 @@
  * returns these as camelCase.
  */
 
-export type Role = 'operator' | 'admin'
+export type Role = 'worker' | 'admin'
 
 export interface Me { role: Role; name?: string }
 

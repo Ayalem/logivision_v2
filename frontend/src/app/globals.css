@@ -181,3 +181,27 @@
 ::-webkit-scrollbar-track { background: transparent; }
 .dark ::-webkit-scrollbar-thumb { background: rgba(71, 85, 105, 0.5); }
 .dark ::-webkit-scrollbar-thumb:hover { background: rgba(71, 85, 105, 0.7); }
+
+@keyframes logo-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.logo-shimmer-text {
+  background: linear-gradient(90deg, #3b82f6, #2dd4bf, #3b82f6);
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: logo-shimmer 4s linear infinite;
+}
+
+.logo-icon-glow {
+  box-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
+  transition: all 0.3s ease;
+}
+
+.logo-icon-glow:hover {
+  box-shadow: 0 0 25px rgba(59, 130, 246, 0.5);
+  transform: scale(1.05) rotate(5deg);
+}

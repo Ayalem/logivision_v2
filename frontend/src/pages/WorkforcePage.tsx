@@ -1,6 +1,8 @@
-import { Users, Activity, AlertTriangle, Clock, TrendingUp } from 'lucide-react'
+import { useState } from 'react'
+import { Users, Activity, AlertTriangle, Clock, TrendingUp, Plus, CheckCircle2 } from 'lucide-react'
 import { useKpis } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useTranslation } from '@/lib/i18n'
 
 // Mock data for workforce
 const WORKFORCE_DATA = [
@@ -18,18 +20,51 @@ const SHIFTS = [
 ]
 
 export function WorkforcePage() {
+  const { t } = useTranslation()
   const { data: kpis } = useKpis()
+  
+  const [assigningTo, setAssigningTo] = useState<string | null>(null)
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskZone, setTaskZone] = useState('Zone A-1')
+  const [taskPriority, setTaskPriority] = useState<'High' | 'Medium' | 'Low'>('Medium')
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const activeWorkers = WORKFORCE_DATA.filter(w => w.status === 'active').length
   const totalWorkers = WORKFORCE_DATA.length
   const avgEfficiency = Math.round(WORKFORCE_DATA.reduce((sum, w) => sum + w.efficiency, 0) / WORKFORCE_DATA.length)
 
+  const handleAssignTask = () => {
+    if (!taskTitle || !assigningTo) return
+    
+    const newTask = {
+      id: Math.random().toString(36).substr(2, 9),
+      title: taskTitle,
+      zone: taskZone,
+      priority: taskPriority,
+      dueTime: 'Today',
+      column: 'To Do',
+      assignedTo: assigningTo
+    }
+
+    const existingTasks = JSON.parse(localStorage.getItem('logivision_tasks') || '[]')
+    localStorage.setItem('logivision_tasks', JSON.stringify([...existingTasks, newTask]))
+    
+    setShowSuccess(true)
+    setTimeout(() => {
+      setShowSuccess(false)
+      setAssigningTo(null)
+      setTaskTitle('')
+    }, 2000)
+  }
+
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Workforce</h1>
-        <p className="text-xs text-muted-foreground mt-1">Gestion des équipes et des performances</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">{t('workforce')}</h1>
+          <p className="text-xs text-muted-foreground mt-1">Gestion des équipes et des performances</p>
+        </div>
       </div>
 
       {/* Workforce Summary */}
@@ -49,7 +84,7 @@ export function WorkforcePage() {
         <div className="glass-card rounded-2xl p-4 shadow-soft">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-muted-foreground mb-1">Efficacité moyenne</p>
+              <p className="text-xs text-muted-foreground mb-1">{t('efficiencyScore')}</p>
               <p className="text-2xl font-bold text-electric">{avgEfficiency}%</p>
             </div>
             <div className="h-10 w-10 rounded-lg bg-electric/10 flex items-center justify-center">
@@ -71,43 +106,6 @@ export function WorkforcePage() {
         </div>
       </div>
 
-      {/* Current Shifts */}
-      <div className="glass-card rounded-2xl shadow-soft overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            Équipes actuelles
-          </h2>
-          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-            {SHIFTS.length} équipes
-          </span>
-        </div>
-
-        <div className="divide-y divide-border/30">
-          {SHIFTS.map((shift) => (
-            <div key={shift.id} className="px-4 py-3 hover:bg-foreground/[0.02] transition-colors">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <p className="text-sm font-medium">{shift.name}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {shift.start} - {shift.end}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-electric">{shift.workers} travailleurs</p>
-                  <span className={cn(
-                    'text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded inline-block mt-1',
-                    shift.status === 'active' ? 'bg-emerald/15 text-emerald' : 'bg-amber/15 text-amber'
-                  )}>
-                    {shift.status === 'active' ? 'En cours' : 'À venir'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Workforce Details */}
       <div className="glass-card rounded-2xl shadow-soft overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex items-center justify-between">
@@ -125,21 +123,18 @@ export function WorkforcePage() {
             <thead className="border-b border-border/30 bg-card/50">
               <tr>
                 <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Nom</th>
-                <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Rôle</th>
                 <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Zone</th>
                 <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Statut</th>
-                <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Vu</th>
                 <th className="px-4 py-2 text-left font-semibold text-muted-foreground">Efficacité</th>
+                <th className="px-4 py-2 text-right font-semibold text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/30">
               {WORKFORCE_DATA.map((worker) => (
                 <tr key={worker.id} className="hover:bg-foreground/[0.02] transition-colors">
-                  <td className="px-4 py-3 font-medium">{worker.name}</td>
                   <td className="px-4 py-3">
-                    <span className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1 rounded bg-card/50">
-                      {worker.role}
-                    </span>
+                    <div className="font-medium">{worker.name}</div>
+                    <div className="text-[10px] text-muted-foreground uppercase">{worker.role}</div>
                   </td>
                   <td className="px-4 py-3">{worker.zone}</td>
                   <td className="px-4 py-3">
@@ -147,14 +142,9 @@ export function WorkforcePage() {
                       'text-[10px] font-semibold uppercase tracking-wider px-2 py-1 rounded inline-flex items-center gap-1',
                       worker.status === 'active' ? 'bg-emerald/15 text-emerald' : 'bg-amber/15 text-amber'
                     )}>
-                      <span className={cn(
-                        'h-1.5 w-1.5 rounded-full',
-                        worker.status === 'active' ? 'bg-emerald' : 'bg-amber'
-                      )} />
                       {worker.status === 'active' ? 'Actif' : 'Inactif'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{worker.lastSeen}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-16 bg-card rounded-full overflow-hidden">
@@ -166,6 +156,15 @@ export function WorkforcePage() {
                       <span className="font-semibold text-emerald">{worker.efficiency}%</span>
                     </div>
                   </td>
+                  <td className="px-4 py-3 text-right">
+                    <button 
+                      onClick={() => setAssigningTo(worker.id)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-electric/10 text-electric text-[10px] font-bold hover:bg-electric/20 transition-colors"
+                    >
+                      <Plus className="h-3 w-3" />
+                      ASSIGN TASK
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -173,61 +172,84 @@ export function WorkforcePage() {
         </div>
       </div>
 
-      {/* Performance Insights */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Top Performers */}
-        <div className="glass-card rounded-2xl p-5 shadow-soft">
-          <h2 className="text-sm font-semibold mb-4">Meilleurs performants</h2>
-          <div className="space-y-2">
-            {[...WORKFORCE_DATA]
-              .sort((a, b) => b.efficiency - a.efficiency)
-              .slice(0, 3)
-              .map((worker) => (
-                <div key={worker.id} className="p-3 rounded-lg bg-card/50 border border-border/30">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-medium">{worker.name}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">{worker.role}</p>
+      {/* Assign Task Modal */}
+      {assigningTo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-card border border-border shadow-2xl rounded-2xl p-6 animate-in zoom-in-95 duration-200">
+            {showSuccess ? (
+              <div className="py-8 text-center space-y-4">
+                <div className="h-12 w-12 bg-emerald/10 text-emerald rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle2 className="h-6 w-6" />
+                </div>
+                <h3 className="text-lg font-bold">Task Assigned!</h3>
+                <p className="text-sm text-muted-foreground">The task has been successfully assigned to the worker.</p>
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg font-bold mb-1">Assign Task</h3>
+                <p className="text-xs text-muted-foreground mb-6">Assigning to {WORKFORCE_DATA.find(w => w.id === assigningTo)?.name}</p>
+                
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Task Title</label>
+                    <input 
+                      type="text" 
+                      placeholder="e.g. Inspect Zone B-4"
+                      value={taskTitle}
+                      onChange={(e) => setTaskTitle(e.target.value)}
+                      className="w-full bg-foreground/5 border border-border/50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-electric/50"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Zone</label>
+                      <select 
+                        value={taskZone}
+                        onChange={(e) => setTaskZone(e.target.value)}
+                        className="w-full bg-foreground/5 border border-border/50 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                      >
+                        <option>Zone A-1</option>
+                        <option>Zone B-4</option>
+                        <option>Zone C-2</option>
+                        <option>Shipping</option>
+                      </select>
                     </div>
-                    <span className="text-sm font-semibold text-emerald">{worker.efficiency}%</span>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Priority</label>
+                      <select 
+                        value={taskPriority}
+                        onChange={(e) => setTaskPriority(e.target.value as any)}
+                        className="w-full bg-foreground/5 border border-border/50 rounded-lg px-3 py-2 text-sm focus:outline-none"
+                      >
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
-              ))}
-          </div>
-        </div>
-
-        {/* Needs Attention */}
-        <div className="glass-card rounded-2xl p-5 shadow-soft">
-          <h2 className="text-sm font-semibold mb-4 flex items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-amber" />
-            Nécessite attention
-          </h2>
-          <div className="space-y-2">
-            {WORKFORCE_DATA
-              .filter(w => w.efficiency < 90 || w.status === 'idle')
-              .slice(0, 3)
-              .map((worker) => (
-                <div key={worker.id} className="p-3 rounded-lg bg-card/50 border border-border/30">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-medium">{worker.name}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        {worker.status === 'idle' ? 'Inactif depuis ' + worker.lastSeen : 'Efficacité faible'}
-                      </p>
-                    </div>
-                    <span className={cn(
-                      'text-sm font-semibold',
-                      worker.efficiency < 90 ? 'text-amber' : 'text-coral'
-                    )}>
-                      {worker.efficiency}%
-                    </span>
-                  </div>
+                
+                <div className="flex gap-3 mt-8">
+                  <button 
+                    onClick={() => setAssigningTo(null)}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold border border-border/50 hover:bg-foreground/5 transition-colors"
+                  >
+                    {t('cancel')}
+                  </button>
+                  <button 
+                    onClick={handleAssignTask}
+                    disabled={!taskTitle}
+                    className="flex-1 py-2.5 rounded-xl text-xs font-bold bg-electric text-white hover:bg-electric/90 disabled:opacity-50 transition-colors"
+                  >
+                    {t('confirm')}
+                  </button>
                 </div>
-              ))}
+              </>
+            )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
-

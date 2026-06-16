@@ -10,11 +10,10 @@ import { StatusBar } from '@/components/layout/StatusBar'
 import { LoginPage } from '@/pages/LoginPage'
 import { useEventStream } from '@/hooks/useEventStream'
 import { useTheme } from '@/hooks/useTheme'
-import { useMe } from '@/lib/api'
 import { useAppStore } from '@/lib/store'
+import { useTranslation } from '@/lib/i18n'
 
-// Lazy-load pages so the heavy R3F bundle is only fetched when the user
-// lands on Overview (or refreshes there).
+// Lazy-load pages
 const OverviewPage   = lazy(() => import('@/pages/OverviewPage').then((m) => ({ default: m.OverviewPage })))
 const EntriesPage    = lazy(() => import('@/pages/EntriesPage').then((m)  => ({ default: m.EntriesPage })))
 const ZonesPage      = lazy(() => import('@/pages/ZonesPage').then((m)    => ({ default: m.ZonesPage })))
@@ -24,6 +23,12 @@ const SystemPage     = lazy(() => import('@/pages/SystemPage').then((m)   => ({ 
 const AnalyticsPage  = lazy(() => import('@/pages/AnalyticsPage').then((m)=> ({ default: m.AnalyticsPage })))
 const InventoryPage  = lazy(() => import('@/pages/InventoryPage').then((m)=> ({ default: m.InventoryPage })))
 const WorkforcePage  = lazy(() => import('@/pages/WorkforcePage').then((m)=> ({ default: m.WorkforcePage })))
+const SettingsPage   = lazy(() => import('@/pages/SettingsPage').then((m)  => ({ default: m.SettingsPage })))
+const ProfilePage    = lazy(() => import('@/pages/ProfilePage').then((m)   => ({ default: m.ProfilePage })))
+const MlMonitoringPage = lazy(() => import('@/pages/MlMonitoringPage').then((m) => ({ default: m.MlMonitoringPage })))
+const UnauthorizedPage = lazy(() => import('@/pages/UnauthorizedPage').then((m) => ({ default: m.UnauthorizedPage })))
+const ActivityLogPage = lazy(() => import('@/pages/ActivityLogPage').then((m) => ({ default: m.ActivityLogPage })))
+const TasksPage = lazy(() => import('@/pages/TasksPage').then((m) => ({ default: m.TasksPage })))
 
 function PageLoader() {
   return (
@@ -35,23 +40,35 @@ function PageLoader() {
 
 function PageRouter() {
   const view = useAppStore((s) => s.currentView)
-  const me   = useMe()
-  const role = me.data?.role ?? 'operator'
+  const userRole = useAppStore((s) => s.userRole)
+  const role = userRole ?? 'worker'
 
-  // Admin-only fallback: if the operator somehow lands on /system, redirect.
-  const safeView = view === 'system' && role !== 'admin' ? 'overview' : view
+  // Admin-only check
+  const adminOnlyViews: (typeof view)[] = ['system', 'ml-monitoring', 'analytics', 'zones', 'activity-log']
+  const isUnauthorized = adminOnlyViews.includes(view) && role !== 'admin'
 
   return (
     <Suspense fallback={<PageLoader />}>
-      {safeView === 'overview'   && <OverviewPage />}
-      {safeView === 'entries'    && <EntriesPage />}
-      {safeView === 'zones'      && <ZonesPage />}
-      {safeView === 'anomalies'  && <AnomaliesPage />}
-      {safeView === 'cameras'    && <CamerasPage />}
-      {safeView === 'system'     && <SystemPage />}
-      {safeView === 'analytics'  && <AnalyticsPage />}
-      {safeView === 'inventory'  && <InventoryPage />}
-      {safeView === 'workforce'  && <WorkforcePage />}
+      {isUnauthorized ? (
+        <UnauthorizedPage />
+      ) : (
+        <>
+          {view === 'overview'   && <OverviewPage />}
+          {view === 'entries'    && <EntriesPage />}
+          {view === 'zones'      && <ZonesPage />}
+          {view === 'anomalies'  && <AnomaliesPage />}
+          {view === 'cameras'    && <CamerasPage />}
+          {view === 'system'     && <SystemPage />}
+          {view === 'ml-monitoring' && <MlMonitoringPage />}
+          {view === 'analytics'  && <AnalyticsPage />}
+          {view === 'inventory'  && <InventoryPage />}
+          {view === 'workforce'  && <WorkforcePage />}
+          {view === 'settings'   && <SettingsPage />}
+          {view === 'profile'    && <ProfilePage />}
+          {view === 'activity-log' && <ActivityLogPage />}
+          {view === 'tasks'      && <TasksPage />}
+        </>
+      )}
     </Suspense>
   )
 }
@@ -59,6 +76,7 @@ function PageRouter() {
 export function App() {
   useTheme()           // apply dark/light class on <html>
   useEventStream(true) // single WS connection for the whole app
+  const { lang } = useTranslation() // Initialize translation hook
 
   const view = useAppStore((s) => s.currentView)
   const isAuthenticated = useAppStore((s) => s.isAuthenticated)

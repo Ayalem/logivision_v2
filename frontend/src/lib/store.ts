@@ -8,16 +8,21 @@ export type ViewType =
   | 'anomalies'
   | 'cameras'
   | 'system'      // admin-only: MLflow runs / drift / benchmarks
+  | 'ml-monitoring' // admin-only: MLflow dashboard mirror
   | 'analytics'   // Analytics dashboard
   | 'inventory'   // Inventory management
   | 'workforce'   // Workforce management
+  | 'settings'    // Account settings
+  | 'profile'     // User profile
+  | 'activity-log' // admin-only: chronological list of user actions
+  | 'tasks'       // worker-only: Kanban board for tasks
 
 export type HeatmapLayer = 'off' | 'traffic' | 'shelf' | 'idle' | 'bottleneck' | 'worker'
 
 interface AppState {
   // Authentication
   isAuthenticated: boolean
-  userRole: 'admin' | 'operator' | null
+  userRole: 'admin' | 'worker' | null
   authToken: string | null
 
   // Navigation / chrome
@@ -47,7 +52,7 @@ interface AppState {
   }
 
   // Setters
-  login: (token: string, role: 'admin' | 'operator') => void
+  login: (token: string, role: 'admin' | 'worker') => void
   logout: () => void
   setView: (v: ViewType) => void
   toggleSidebar: () => void
