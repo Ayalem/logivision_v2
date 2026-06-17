@@ -44,8 +44,20 @@ services:
       AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minioadmin}
       AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+    # The base image has no default server command, and lacks the Postgres
+    # + S3 drivers. Install them, then serve with the Postgres backend store
+    # and MinIO (s3://) artifact root. $$VAR defers expansion to the
+    # container shell so it reads the env vars defined above.
+    command: >
+      sh -c "pip install --quiet --no-cache-dir psycopg2-binary boto3 &&
+      exec mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri $${MLFLOW_BACKEND_STORE_URI}
+      --default-artifact-root $${MLFLOW_DEFAULT_ARTIFACT_ROOT}"
     ports:
-      - "5000:5000"
+      # Host 5050 → container 5000: the whole project expects MLflow at
+      # http://localhost:5050 (resolve_model_weights default, notebooks,
+      # ONBOARDING), and host 5000 collides with macOS AirPlay Receiver.
+      - "5050:5000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -58,7 +70,10 @@ services:
     image: clickhouse/clickhouse-server:24.8
     ports:
       - "8123:8123"
-      - "9000:9000"
+      # Host 9100 → container 9000: MinIO already owns host 9000 (S3 API).
+      # ClickHouse's native port stays 9000 inside the compose network
+      # (peers connect via `clickhouse:9000`); only the host mapping moves.
+      - "9100:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./clickhouse/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
@@ -74,10 +89,12 @@ services:
   pgadmin:
     image: dpage/pgadmin4:8
     environment:
-      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@logivision.local}
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@logivision.com}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
     ports:
-      - "5050:80"
+      # Host 5051 → container 80: MLflow owns host 5050 (the URL all the
+      # code + docs use). pgAdmin is an optional debug UI, so it moves.
+      - "5051:80"
     depends_on:
       - postgres
     networks:
