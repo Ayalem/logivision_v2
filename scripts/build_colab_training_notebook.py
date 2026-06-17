@@ -142,9 +142,14 @@ print('LOCO is CC0 public domain — no Kaggle/login needed.')
 # Cell 4 - download dataset
 code(
     """# 4. Download LOCO — real warehouse imagery (~769 MB, CC0, no login).
-#    5,593 photos from 5 operating logistics environments.
-import subprocess, sys
-subprocess.run([sys.executable, 'scripts/fetch_loco.py'], check=True)
+#    Import + call main() so any real error prints HERE (a subprocess hides it
+#    behind a generic CalledProcessError). fetch_loco validates the zip and
+#    retries on a dropped connection — if it still fails, just re-run the cell.
+import fetch_loco
+rc = fetch_loco.main([])
+if rc:
+    raise RuntimeError(f'fetch_loco failed (code {rc}) — read the message above. '
+                       'Usually a flaky download; re-running this cell fixes it.')
 print('LOCO downloaded + extracted under datasets/raw/loco/')
 """
 )
@@ -157,8 +162,10 @@ code(
 #    subset (train = 2,3,5 / val = 1 / test = 4) guarantees no scene leaks
 #    across splits — the honest, leak-free evaluation setup. Classes:
 #    small_load_carrier, forklift, pallet, stillage, pallet_truck.
-import subprocess, sys, pathlib
-subprocess.run([sys.executable, 'scripts/prepare_loco.py'], check=True)
+import pathlib, prepare_loco
+rc = prepare_loco.main(['--symlink'])
+if rc:
+    raise RuntimeError(f'prepare_loco failed (code {rc}) — read the message above.')
 
 DATA_YAML = pathlib.Path('datasets/processed/loco/data.yaml').resolve()
 print('LOCO data.yaml:', DATA_YAML)

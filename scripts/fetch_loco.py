@@ -88,6 +88,9 @@ def _download(url: str, dest: Path) -> None:
                         end="",
                     )
     print()
+    if total and done < total:
+        part.unlink(missing_ok=True)
+        raise OSError(f"truncated download: got {done} of {total} bytes (connection dropped?)")
     part.rename(dest)
 
 
@@ -132,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
 
     LOCO_DIR.mkdir(parents=True, exist_ok=True)
 
-    if ZIP_PATH.is_file() and not args.force:
+    if ZIP_PATH.is_file() and not args.force and zipfile.is_zipfile(ZIP_PATH):
         logger.info(
             "%s already on disk (%.1f MB) — skipping download.",
             ZIP_PATH.name,
@@ -140,14 +143,32 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         logger.info("Downloading LOCO annotated set from %s ...", DOWNLOAD_URL)
-        try:
-            _download(DOWNLOAD_URL, ZIP_PATH)
-        except OSError as exc:
-            logger.error("Download failed: %s", exc)
+        # Retry: Colab/long downloads occasionally drop the connection, which
+        # would otherwise leave a truncated zip that crashes extraction.
+        for attempt in range(1, 4):
+            try:
+                _download(DOWNLOAD_URL, ZIP_PATH)
+                break
+            except OSError as exc:
+                logger.warning("download attempt %d/3 failed: %s", attempt, exc)
+        else:
+            logger.error("Download failed after 3 attempts (network?). Just re-run the cell.")
             return 2
 
+    # Guard: a partial/HTML response is not a valid zip — fail clearly and
+    # remove it so the next run re-downloads instead of crashing on extract.
+    if not zipfile.is_zipfile(ZIP_PATH):
+        ZIP_PATH.unlink(missing_ok=True)
+        logger.error("Downloaded file is not a valid zip (partial/corrupt). Removed it — re-run to retry.")
+        return 2
+
     logger.info("Extracting %s ...", ZIP_PATH.name)
-    n = _extract(ZIP_PATH, LOCO_DIR)
+    try:
+        n = _extract(ZIP_PATH, LOCO_DIR)
+    except zipfile.BadZipFile:
+        ZIP_PATH.unlink(missing_ok=True)
+        logger.error("Zip corrupt during extract — removed it; re-run to re-download.")
+        return 2
     logger.info("Extracted %d members into %s", n, LOCO_DIR.relative_to(REPO))
 
     # Annotations (separate from the image zip) — required by prepare_loco.py.
