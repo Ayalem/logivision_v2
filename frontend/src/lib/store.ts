@@ -7,11 +7,24 @@ export type ViewType =
   | 'zones'
   | 'anomalies'
   | 'cameras'
-  | 'system'   // admin-only: MLflow runs / drift / benchmarks
+  | 'system'      // admin-only: MLflow runs / drift / benchmarks
+  | 'ml-monitoring' // admin-only: MLflow dashboard mirror
+  | 'analytics'   // Analytics dashboard
+  | 'inventory'   // Inventory management
+  | 'workforce'   // Workforce management
+  | 'settings'    // Account settings
+  | 'profile'     // User profile
+  | 'activity-log' // admin-only: chronological list of user actions
+  | 'tasks'       // worker-only: Kanban board for tasks
 
 export type HeatmapLayer = 'off' | 'traffic' | 'shelf' | 'idle' | 'bottleneck' | 'worker'
 
 interface AppState {
+  // Authentication
+  isAuthenticated: boolean
+  userRole: 'admin' | 'worker' | null
+  authToken: string | null
+
   // Navigation / chrome
   currentView: ViewType
   sidebarCollapsed: boolean
@@ -39,6 +52,8 @@ interface AppState {
   }
 
   // Setters
+  login: (token: string, role: 'admin' | 'worker') => void
+  logout: () => void
   setView: (v: ViewType) => void
   toggleSidebar: () => void
   toggleFocusMode: () => void
@@ -60,6 +75,11 @@ interface AppState {
 const LIVE_BUFFER_MAX = 200
 
 export const useAppStore = create<AppState>((set) => ({
+  // Authentication state
+  isAuthenticated: false,
+  userRole: null,
+  authToken: null,
+
   // Land on the Caméras view by default — the operator's primary
   // concern is what each camera sees. The Overview/3D twin lives one
   // click away in the sidebar.
@@ -80,6 +100,18 @@ export const useAppStore = create<AppState>((set) => ({
 
   live: { events: [], lastEventTs: null, wsState: 'idle' },
 
+  login: (token, role) => {
+    set({ isAuthenticated: true, authToken: token, userRole: role })
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('logivision_auth', JSON.stringify({ token, role }))
+    }
+  },
+  logout: () => {
+    set({ isAuthenticated: false, authToken: null, userRole: null })
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('logivision_auth')
+    }
+  },
   setView:                (v) => set({ currentView: v }),
   toggleSidebar:          () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleFocusMode:        () => set((s) => ({ focusMode: !s.focusMode })),
@@ -101,3 +133,16 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   setWsState: (wsState) => set((s) => ({ live: { ...s.live, wsState } })),
 }))
+
+// Restore auth state from localStorage on app load
+if (typeof window !== 'undefined') {
+  const stored = localStorage.getItem('logivision_auth')
+  if (stored) {
+    try {
+      const { token, role } = JSON.parse(stored)
+      useAppStore.setState({ isAuthenticated: true, authToken: token, userRole: role })
+    } catch (e) {
+      console.error('Failed to restore auth state:', e)
+    }
+  }
+}

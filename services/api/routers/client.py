@@ -23,7 +23,7 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["client"])
@@ -888,3 +888,111 @@ def list_insights(n: int = 10) -> dict:
     snapshots, _ = _peek_topic(KAFKA_OCCUPANCY_TOPIC, n=2500, timeout_s=1.0)
     chains = _insight_chains(events, now_ms, snapshots)
     return {"insights": chains[:n], "degraded": degraded}
+
+
+# ---------------------------------------------------------------------------
+# Workforce & tasks — operational CRUD for the Workforce/Tasks dashboard pages.
+# This is an in-memory prototype store, NOT model output, so seeding sample
+# rows is fine (the no-fake-data rule covers KPIs/forecasts/anomalies, which
+# stay tied to real Kafka events). The full DB-backed version lives on the
+# frontend-updates branch (services/api/database.py); swap this for it when
+# persistence is needed.
+# ---------------------------------------------------------------------------
+_WORKERS: list[dict] = [
+    {
+        "id": "W-001",
+        "name": "Yassine B.",
+        "email": "yassine@logivision.com",
+        "role": "operator",
+        "zone": "DOCK-A",
+        "status": "active",
+        "last_seen": "just now",
+        "efficiency": 94,
+    },
+    {
+        "id": "W-002",
+        "name": "Farah E.",
+        "email": "farah@logivision.com",
+        "role": "admin",
+        "zone": "Control Room",
+        "status": "active",
+        "last_seen": "2 min ago",
+        "efficiency": 98,
+    },
+    {
+        "id": "W-003",
+        "name": "Karim T.",
+        "email": "karim@logivision.com",
+        "role": "operator",
+        "zone": "AISLE-A1",
+        "status": "break",
+        "last_seen": "15 min ago",
+        "efficiency": 88,
+    },
+]
+_TASKS: list[dict] = [
+    {
+        "id": "T-001",
+        "title": "Inspecter palette zone A1",
+        "zone": "AISLE-A1",
+        "priority": "high",
+        "due_time": "Today",
+        "column": "To Do",
+        "assigned_to": "W-001",
+    },
+    {
+        "id": "T-002",
+        "title": "Vérifier chariot quai B",
+        "zone": "DOCK-B",
+        "priority": "medium",
+        "due_time": "Today",
+        "column": "In Progress",
+        "assigned_to": "W-003",
+    },
+]
+
+
+@router.get("/workers")
+def list_workers() -> dict:
+    return {"workers": _WORKERS}
+
+
+@router.post("/workers")
+def create_worker(worker: dict) -> dict:
+    worker.setdefault("id", f"W-{len(_WORKERS) + 1:03d}")
+    worker.setdefault("status", "active")
+    worker.setdefault("last_seen", "just now")
+    worker.setdefault("efficiency", 100)
+    _WORKERS.append(worker)
+    return worker
+
+
+@router.get("/tasks")
+def list_tasks() -> dict:
+    return {"tasks": _TASKS}
+
+
+@router.post("/tasks")
+def create_task(task: dict) -> dict:
+    task.setdefault("id", f"T-{len(_TASKS) + 1:03d}")
+    task.setdefault("column", "To Do")
+    _TASKS.append(task)
+    return task
+
+
+# Demo auth for the redesign's login flow. NOT real security — a prototype
+# gate matching the credentials shown on the login page. Swap for the
+# DB-backed auth (frontend-updates branch) before any real deployment.
+_DEMO_CREDENTIALS = {
+    "admin@logivision.com": {"password": "admin123", "role": "admin"},
+    "worker@logivision.com": {"password": "worker123", "role": "worker"},
+}
+
+
+@router.post("/login")
+def login(creds: dict) -> dict:
+    email = (creds.get("email") or "").strip().lower()
+    user = _DEMO_CREDENTIALS.get(email)
+    if not user or user["password"] != (creds.get("password") or ""):
+        raise HTTPException(status_code=401, detail="Identifiants invalides")
+    return {"token": f"demo-{email}-{int(time.time())}", "role": user["role"]}

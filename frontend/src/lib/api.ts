@@ -102,14 +102,10 @@ export interface CongestionForecast {
   confidence: number
   density: number
   timestamp_ms: number
-  /** Identifies whether the trained LSTM (lstm-birmingham-v2) produced
-   * this forecast or the rule-based fallback (rule-v0). The UI uses this
-   * to flip the panel badge between the LSTM tag and the amber rule tag. */
-  forecast_source?: 'lstm-birmingham-v2' | 'rule-v0'
-  /** Present when the LSTM is loaded but lacks real occupancy history. */
-  lstm_status?: 'insufficient-history'
-  lstm_bins_available?: number
-  lstm_bins_required?: number
+  /** Identifies whether the trained LSTM (lstm-prsa-v1) produced this
+   * forecast or the rule-based fallback (rule-v0). The UI uses this to
+   * flip the panel badge between the green LSTM tag and the amber rule tag. */
+  forecast_source?: 'lstm-prsa-v1' | 'rule-v0'
 }
 export interface CollisionRisk {
   event_id: string
@@ -159,38 +155,6 @@ export const useModelInfo = () =>
     queryFn: () => getJson<import('./types').ModelInfo>('/api/model-info'),
     refetchInterval: 60_000,  // doesn't change often
     staleTime: 30_000,
-  })
-
-// ─── Admin / Système MLOps hooks ───
-// Lightweight wrappers around the existing /api/topics, /api/drift, /api/benchmarks
-// endpoints so the Système page can render them in one place without hitting
-// the FastAPI gateway four times on render.
-
-export interface TopicMessages {
-  messages: Array<Record<string, unknown>>
-  degraded: boolean
-}
-export const useTopicMessages = (topic: string, n = 10) =>
-  useQuery<TopicMessages>({
-    queryKey: ['topic', topic, n],
-    queryFn: () => getJson<TopicMessages>(`/api/topics/${topic}/messages?n=${n}`),
-    refetchInterval: 5_000,
-  })
-
-export interface ReportListing {
-  reports: Array<{ name: string; size_bytes: number; modified: number }>
-}
-export const useDriftReports = () =>
-  useQuery<ReportListing>({
-    queryKey: ['drift'],
-    queryFn: () => getJson<ReportListing>('/api/drift/reports'),
-    refetchInterval: 60_000,
-  })
-export const useBenchmarks = () =>
-  useQuery<ReportListing>({
-    queryKey: ['benchmarks'],
-    queryFn: () => getJson<ReportListing>('/api/benchmarks'),
-    refetchInterval: 60_000,
   })
 
 export interface HeatmapResponse {
@@ -259,3 +223,60 @@ export const useDetections = (n = 20) =>
     refetchInterval: 1_500,        // ~10x faster than zones — boxes feel live
     retry: false,
   })
+
+// ---------- workers & tasks (PostgreSQL backed) ----------
+
+export interface Worker {
+  id: string
+  name: string
+  email: string
+  role: string
+  zone: string
+  status: string
+  last_seen: string
+  efficiency: number
+}
+
+export interface Task {
+  id: string
+  title: string
+  zone: string
+  priority: string
+  due_time: string
+  column: string
+  assigned_to: string
+}
+
+export const useWorkers = () =>
+  useQuery<{ workers: Worker[] }>({
+    queryKey: ['workers'],
+    queryFn: () => getJson<{ workers: Worker[] }>('/api/workers'),
+    refetchInterval: 10_000,
+  })
+
+export const useTasks = () =>
+  useQuery<{ tasks: Task[] }>({
+    queryKey: ['tasks'],
+    queryFn: () => getJson<{ tasks: Task[] }>('/api/tasks'),
+    refetchInterval: 10_000,
+  })
+
+export async function createWorker(worker: Partial<Worker>) {
+  const r = await fetch('/api/workers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(worker),
+  })
+  if (!r.ok) throw new Error(`Failed to create worker: ${r.status}`)
+  return r.json()
+}
+
+export async function createTask(task: Partial<Task>) {
+  const r = await fetch('/api/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(task),
+  })
+  if (!r.ok) throw new Error(`Failed to create task: ${r.status}`)
+  return r.json()
+}

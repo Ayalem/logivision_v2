@@ -4,7 +4,7 @@
  * returns these as camelCase.
  */
 
-export type Role = 'operator' | 'admin'
+export type Role = 'worker' | 'admin'
 
 export interface Me { role: Role; name?: string }
 
@@ -16,14 +16,10 @@ export interface Zone {
   name: string
   kind: ZoneKind
   category: string
-  /** 0-100 from the latest real zone-occupancy snapshot, or null when
-   *  the pipeline hasn't produced one yet (UI renders an em-dash). */
-  occupancy: number | null
+  occupancy: number       // 0-100
   capacity: number
-  currentItems: number | null
-  status: 'normal' | 'warning' | 'critical' | 'unknown'
-  /** true when occupancy traces to a real CEP snapshot. */
-  live: boolean
+  currentItems: number
+  status: 'normal' | 'warning' | 'critical'
   x: number; y: number; width: number; height: number  // % bbox
   polygon: ZonePolygonPoint[]                          // 0..1 coords
   lastUpdated: string
@@ -75,14 +71,11 @@ export interface Kpis {
   todayEntries: number
   todayExits: number
   activeAnomalies: number
-  systemStatus: 'operational' | 'degraded' | 'offline' | 'waiting'
+  systemStatus: 'operational' | 'degraded' | 'offline'
   camerasOnline: number
   totalCameras: number
   avgProcessingTime: number
   stockLevel: number
-  /** True iff a real Kafka event / detection / raw-frame arrived recently.
-   * When false the tiles render '—' instead of zeros and a waiting banner appears. */
-  pipelineActive: boolean
   degraded: boolean
 }
 
@@ -100,10 +93,10 @@ export interface LiveEvent {
 
 // Prediction event types — backend emits these from /api/predictions.
 //
-// `forecast_source` tells the UI whether to render the "LSTM · Birmingham" badge
+// `forecast_source` tells the UI whether to render the "LSTM · PRSA" badge
 // (model is loaded and produced the number) or the "rule v0" badge (the
 // model artifact is missing and the heuristic ran instead).
-export type ForecastSource = 'lstm-birmingham-v2' | 'rule-v0'
+export type ForecastSource = 'lstm-prsa-v1' | 'rule-v0'
 
 export interface CongestionForecast {
   event_type: 'congestion_forecast'
