@@ -399,10 +399,16 @@ history). Condensed status:
 | Phase | Scope | Status |
 |---|---|---|
 | **1 — MLOps Computer Vision** | YOLO+ByteTrack, MLflow registry, DVC, Colab training, eval gates | ✅ core done |
-| **2 — Streaming (Kafka + Flink)** | Kafka pipeline + CEP live; PyFlink jobs schema-aligned, not yet wired | 🟡 CEP live, Flink pending (`services/flink-jobs/STATUS.md`) |
-| **3 — Feature Store (Feast)** | Redis online + Parquet offline | ⬜ future (features computed on the fly today) |
-| **4 — Advanced serving & monitoring** | BentoML, drift, A/B / canary | ⬜ future |
+| **2 — Streaming (Kafka + Flink)** | Kafka pipeline + CEP live; **PyFlink jobs are a required deliverable for the end of the project** | 🟡 CEP live · **Flink in progress (in scope, owned by a teammate)** — see `services/flink-jobs/STATUS.md` |
+| **3 — Feature Store (Feast)** | Redis online + Parquet offline | ⬜ optional / future (features computed on the fly today) |
+| **4 — Advanced serving & monitoring** | BentoML, drift, A/B / canary | ⬜ optional / future |
 | **5 — Infra & CI/CD** | K3s, observability, security scans | 🟡 CI (ruff+pytest) live; rest future |
+
+> **Flink is a committed end-of-project deliverable, not a "someday" upgrade.**
+> The single-process Python CEP (`cep.py`) is the interim engine; the PyFlink
+> jobs in `services/flink-jobs/` must be wired in and demonstrated by the
+> project's end. Feast / BentoML / K3s (phases 3–4 and parts of 5) are the
+> genuinely optional future work — Flink is not.
 
 ---
 
