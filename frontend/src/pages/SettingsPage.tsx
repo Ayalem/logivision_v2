@@ -1,7 +1,18 @@
+import { useState } from 'react'
 import { Mail, Lock, Bell, Trash2, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export function SettingsPage() {
+  const [notifs, setNotifs] = useState({
+    'notif-email': true,
+    'notif-push': true,
+    'notif-sms': false
+  })
+
+  const toggleNotif = (id: string) => {
+    setNotifs(prev => ({ ...prev, [id]: !prev[id as keyof typeof prev] }))
+  }
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="glass-card rounded-2xl p-6 shadow-soft">
@@ -93,17 +104,29 @@ export function SettingsPage() {
               { id: 'notif-email', label: 'Alertes par email', desc: 'Recevoir les incidents critiques par email' },
               { id: 'notif-push', label: 'Notifications push', desc: 'Alertes en temps réel sur le navigateur' },
               { id: 'notif-sms', label: 'Alertes SMS', desc: 'Urgences de sécurité uniquement' },
-            ].map((item) => (
-              <div key={item.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-foreground/5 transition-colors">
-                <div>
-                  <div className="text-xs font-medium">{item.label}</div>
-                  <div className="text-[9px] text-muted-foreground">{item.desc}</div>
+            ].map((item) => {
+              const isActive = notifs[item.id as keyof typeof notifs]
+              return (
+                <div key={item.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-foreground/5 transition-colors">
+                  <div>
+                    <div className="text-xs font-medium">{item.label}</div>
+                    <div className="text-[9px] text-muted-foreground">{item.desc}</div>
+                  </div>
+                  <button 
+                    onClick={() => toggleNotif(item.id)}
+                    className={cn(
+                      "relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer outline-none",
+                      isActive ? "bg-electric" : "bg-border/50"
+                    )}
+                  >
+                    <div className={cn(
+                      "h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                      isActive ? "translate-x-4" : "translate-x-1"
+                    )} />
+                  </button>
                 </div>
-                <div className="relative inline-flex h-5 w-9 items-center rounded-full bg-border/50 cursor-pointer">
-                  <div className="h-4 w-4 translate-x-1 rounded-full bg-white shadow-sm" />
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 

@@ -24,7 +24,9 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends, Body, HTTPException
+from sqlalchemy.orm import Session
+from services.api.database import get_db, Worker, Task as DBTask
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["client"])
@@ -44,7 +46,28 @@ LOGIVISION_ROLE = os.environ.get("LOGIVISION_ROLE", "operator")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
+@router.post("/login")
+def login_user(login_data: dict = Body(...), db: Session = Depends(get_db)) -> dict:
+    """Authenticate user against the database."""
+    email = login_data.get("email")
+    password = login_data.get("password")
+    
+    # Check demo accounts first
+    if email == 'admin@logivision.com' and password == 'admin123':
+        return {"token": f"token_{int(time.time())}", "role": "admin", "status": "success"}
+    if email == 'worker@logivision.com' and password == 'worker123':
+        return {"token": f"token_{int(time.time())}", "role": "worker", "status": "success"}
+        
+    # Check database
+    user = db.query(Worker).filter(Worker.email == email).first()
+    if user and user.password == password:
+        return {
+            "token": f"token_{int(time.time())}", 
+            "role": "admin" if user.role == "admin" else "worker", 
+            "status": "success"
+        }
+    
+    raise HTTPException(status_code=401, detail="Identifiants invalides")
 
 def _stable_pct(seed: str, lo: int = 30, hi: int = 95) -> int:
     """Deterministic 'occupancy %' from a name, so reloading the dashboard
@@ -259,6 +282,81 @@ def get_me() -> dict:
     """Current session role. Stub for the demo — replace with OIDC later."""
     role = LOGIVISION_ROLE if LOGIVISION_ROLE in {"operator", "admin"} else "operator"
     return {"role": role, "name": "demo"}
+
+
+def _model_to_dict(model) -> dict:
+    """Helper to convert a SQLAlchemy model instance to a dictionary for JSON serialization."""
+    if model is None:
+        return {}
+    return {col.name: getattr(model, col.name) for col in model.__table__.columns}
+
+
+@router.get("/workers")
+def list_workers(db: Session = Depends(get_db)) -> dict:
+    workers = db.query(Worker).all()
+    return {"workers": [_model_to_dict(w) for w in workers]}
+
+
+@router.post("/register")
+def register_user(user_data: dict = Body(...), db: Session = Depends(get_db)) -> dict:
+    """Register a new user (operator/admin) into the database."""
+    # We use the Worker table for simplicity as it already stores user-like data
+    user = Worker(
+        id=user_data.get("id", f"user_{int(time.time())}"),
+        name=user_data.get("name"),
+        email=user_data.get("email"),
+        password=user_data.get("password"),
+        role=user_data.get("role", "operator"),
+        zone=user_data.get("zone", "General"),
+        status="active",
+        last_seen="Now",
+        efficiency=100,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return {"user": _model_to_dict(user), "status": "success"}
+
+
+@router.post("/workers")
+def create_worker(worker_data: dict = Body(...), db: Session = Depends(get_db)) -> dict:
+    worker = Worker(
+        id=worker_data.get("id"),
+        name=worker_data.get("name"),
+        email=worker_data.get("email"),
+        role=worker_data.get("role"),
+        zone=worker_data.get("zone"),
+        status=worker_data.get("status", "active"),
+        last_seen=worker_data.get("lastSeen", "Now"),
+        efficiency=worker_data.get("efficiency", 100),
+    )
+    db.add(worker)
+    db.commit()
+    db.refresh(worker)
+    return {"worker": _model_to_dict(worker)}
+
+
+@router.get("/tasks")
+def list_tasks(db: Session = Depends(get_db)) -> dict:
+    tasks = db.query(DBTask).all()
+    return {"tasks": [_model_to_dict(t) for t in tasks]}
+
+
+@router.post("/tasks")
+def create_task(task_data: dict = Body(...), db: Session = Depends(get_db)) -> dict:
+    task = DBTask(
+        id=task_data.get("id"),
+        title=task_data.get("title"),
+        zone=task_data.get("zone"),
+        priority=task_data.get("priority"),
+        due_time=task_data.get("dueTime"),
+        column=task_data.get("column", "To Do"),
+        assigned_to=task_data.get("assignedTo"),
+    )
+    db.add(task)
+    db.commit()
+    db.refresh(task)
+    return {"task": _model_to_dict(task)}
 
 
 @router.get("/zones")

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { User, Mail, Phone, Calendar, Shield, Edit2, Check, X } from 'lucide-react'
 import { useMe } from '@/lib/api'
+import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 export function ProfilePage() {

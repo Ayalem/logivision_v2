@@ -50,6 +50,11 @@ KAFKA_EVENTS_TOPIC = os.environ.get("KAFKA_EVENTS_TOPIC", "events")
 async def lifespan(_app: FastAPI):
     """Startup/shutdown hooks (placeholder — connection pools could live here)."""
     logger.info("api startup: MLflow=%s Kafka=%s", MLFLOW_TRACKING_URI, KAFKA_BOOTSTRAP)
+    try:
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
     yield
     logger.info("api shutdown")
 
@@ -60,6 +65,7 @@ app = FastAPI(title="LOGIVISION API", version="0.1.0", lifespan=lifespan)
 # Kept in a sibling module so this file stays focused on MLOps/admin routes.
 from services.api.routers import client as client_router  # noqa: E402
 from services.api.routers import stream as stream_router  # noqa: E402
+from services.api.database import init_db  # noqa: E402
 
 app.include_router(client_router.router)
 app.include_router(stream_router.router)

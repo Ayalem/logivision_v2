@@ -223,3 +223,60 @@ export const useDetections = (n = 20) =>
     refetchInterval: 1_500,        // ~10x faster than zones — boxes feel live
     retry: false,
   })
+
+// ---------- workers & tasks (PostgreSQL backed) ----------
+
+export interface Worker {
+  id: string
+  name: string
+  email: string
+  role: string
+  zone: string
+  status: string
+  last_seen: string
+  efficiency: number
+}
+
+export interface Task {
+  id: string
+  title: string
+  zone: string
+  priority: string
+  due_time: string
+  column: string
+  assigned_to: string
+}
+
+export const useWorkers = () =>
+  useQuery<{ workers: Worker[] }>({
+    queryKey: ['workers'],
+    queryFn: () => getJson<{ workers: Worker[] }>('/api/workers'),
+    refetchInterval: 10_000,
+  })
+
+export const useTasks = () =>
+  useQuery<{ tasks: Task[] }>({
+    queryKey: ['tasks'],
+    queryFn: () => getJson<{ tasks: Task[] }>('/api/tasks'),
+    refetchInterval: 10_000,
+  })
+
+export async function createWorker(worker: Partial<Worker>) {
+  const r = await fetch('/api/workers', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(worker),
+  })
+  if (!r.ok) throw new Error(`Failed to create worker: ${r.status}`)
+  return r.json()
+}
+
+export async function createTask(task: Partial<Task>) {
+  const r = await fetch('/api/tasks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(task),
+  })
+  if (!r.ok) throw new Error(`Failed to create task: ${r.status}`)
+  return r.json()
+}
