@@ -182,6 +182,20 @@ def _humanise_event(evt: dict) -> str:
         return f"Entrée: {klass} → {zone}"
     if t == "exit":
         return f"Sortie: {klass} ← {zone}"
+    if t == "trajectory_anomaly":
+        feature_fr = {
+            "speed": "vitesse anormale",
+            "accel": "accélération anormale",
+            "dir_change": "changement de direction brutal",
+            "log_aspect": "forme anormale",
+            "d_aspect": "basculement détecté",
+            "sqrt_area": "taille anormale",
+            "dwell_ratio": "immobilité prolongée",
+            "dt_s": "trajectoire irrégulière",
+        }.get(p.get("dominant_feature", ""), "comportement anormal")
+        return f"Anomalie de trajectoire ({feature_fr}): {klass}"
+    if t == "box_falling":
+        return f"Chute détectée: {klass}"
     return f"Événement {t}"
 
 
@@ -326,7 +340,13 @@ def list_anomalies(n: int = 50) -> dict:
         out.append(
             {
                 "id": evt.get("event_id", ""),
-                "type": "overflow" if etype_raw == "stationary_object" else "unauthorized",
+                "type": (
+                    "behavior"
+                    if etype_raw in {"trajectory_anomaly", "box_falling"}
+                    else "overflow"
+                    if etype_raw == "stationary_object"
+                    else "unauthorized"
+                ),
                 "severity": "critical" if sev == "critical" else "warning",
                 "zone": zone_id.replace("_", " ").title() if zone_id else "—",
                 "zoneId": zone_id,
