@@ -69,7 +69,7 @@ def fetch_frame_bytes(s3_client: Any, frame_uri: str) -> bytes:
 def make_detection_payload(
     raw: dict, detections: list[dict], model_version: str, inference_ms: float
 ) -> dict:
-    return {
+    payload = {
         "frame_id": raw["frame_id"],
         "camera_id": raw["camera_id"],
         "timestamp_ms": raw["timestamp_ms"],
@@ -78,6 +78,13 @@ def make_detection_payload(
         "frame_uri": raw["frame_uri"],
         "detections": detections,
     }
+    # Pass the true frame dimensions through when the grabber provided
+    # them — CEP zone normalisation and trajectory features prefer these
+    # over the bbox-extent estimate (kept as fallback for old payloads).
+    for key in ("width", "height"):
+        if raw.get(key):
+            payload[key] = int(raw[key])
+    return payload
 
 
 def detect_on_image_bytes(model: Any, image_bytes: bytes, conf: float) -> list[dict]:

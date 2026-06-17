@@ -61,11 +61,17 @@ class TrackPoint:
 @dataclass
 class TrackState:
     points: deque[TrackPoint] = field(default_factory=lambda: deque(maxlen=2000))
-    stationary_event_emitted_ms: int = 0
+    # "Never emitted" sentinel is -1, not 0: timestamp_ms=0 is a legitimate
+    # value (epoch-relative streams, tests), and a real emission at t=0 must
+    # not be mistaken for "never fired" on the next message.
+    stationary_event_emitted_ms: int = -1
     last_zone: str | None = None
     # Cooldown for falling events so a single fall doesn't spam the topic
     # across the 1-second window we evaluate it on.
-    falling_event_emitted_ms: int = 0
+    falling_event_emitted_ms: int = -1
+    # Cooldown for ML trajectory anomalies (one fall shouldn't re-fire
+    # on every scored window of its aftermath).
+    trajectory_anomaly_emitted_ms: int = -1
 
 
 # Allowed values for Zone.kind. `forbidden` keeps the legacy behaviour
@@ -98,6 +104,16 @@ class CEPConfig:
     # `occupancy_idle_expiry_s` without a sighting.
     occupancy_snapshot_s: float = float(os.environ.get("OCCUPANCY_SNAPSHOT_S", "300"))
     occupancy_idle_expiry_s: float = 30.0
+    # ── Anomaly detection mode ──────────────────────────────────────────
+    #   ae    → GRU autoencoder is the primary detector; the stationary/
+    #           falling rules still run but emit severity=info with
+    #           payload.source=rule-baseline (article comparison data —
+    #           the dashboard's anomaly feed skips info severity).
+    #   rules → legacy behaviour, rules at full severity (also the
+    #           automatic fallback when the AE artifact fails to load).
+    #   both  → rules at full severity AND AE events (debug).
+    anomaly_mode: str = os.environ.get("ANOMALY_MODE", "ae")
+    trajectory_anomaly_cooldown_s: float = 10.0
     stationary_window_s: float = 30.0
     stationary_radius_px: float = 25.0
     # Re-emit cooldown so we don't spam the same stationary alert.
@@ -199,8 +215,8 @@ def evaluate_stationary(
         return False
     if not _is_stationary(relevant, config.stationary_radius_px):
         return False
-    # Cooldown — skipped when we have never emitted (sentinel value 0).
-    if state.stationary_event_emitted_ms == 0:
+    # Cooldown — skipped when we have never emitted (sentinel value -1).
+    if state.stationary_event_emitted_ms < 0:
         return True
     return (now_ms - state.stationary_event_emitted_ms) >= config.stationary_cooldown_s * 1000
 
@@ -253,7 +269,7 @@ def evaluate_falling(
         return False
 
     # Cooldown
-    if state.falling_event_emitted_ms == 0:
+    if state.falling_event_emitted_ms < 0:
         return True
     return (now_ms - state.falling_event_emitted_ms) >= config.falling_cooldown_s * 1000
 
@@ -374,16 +390,32 @@ def process_one(
     zones: list[Zone],
     config: CEPConfig,
     occupancy: ZoneOccupancyAggregator | None = None,
+    scorer: Any | None = None,
 ) -> list[dict]:
-    """Update state for one frame and return the events to emit."""
+    """Update state for one frame and return the events to emit.
+
+    `scorer` is an `anomaly_scorer.AnomalyScorer` (or None). With
+    `anomaly_mode="ae"` and a loaded scorer, the GRU-AE is the primary
+    anomaly detector and the stationary/falling rules are demoted to
+    severity=info baseline events. Without a scorer the rules keep full
+    severity regardless of the configured mode (graceful fallback).
+    """
     emitted: list[dict] = []
     camera_id = detection_message["camera_id"]
     timestamp_ms = int(detection_message["timestamp_ms"])
-    # We don't know the original image dims server-side, so use bbox-relative
-    # normalisation: a zone polygon is defined in 0..1 of (x2-max, y2-max).
-    # Estimate from the largest bbox seen in this batch.
-    image_w = max((int(d.get("x2", 0)) for d in detection_message.get("detections", [])), default=1)
-    image_h = max((int(d.get("y2", 0)) for d in detection_message.get("detections", [])), default=1)
+
+    mode = config.anomaly_mode if config.anomaly_mode in ("ae", "rules", "both") else "ae"
+    ae_active = mode in ("ae", "both") and scorer is not None and scorer.available
+    demote_rules = mode == "ae" and ae_active
+    # Prefer the true frame dimensions when the worker passed them through;
+    # fall back to the legacy bbox-extent estimate for older payloads
+    # (zone polygons are defined in 0..1 of the frame).
+    image_w = int(detection_message.get("width") or 0) or max(
+        (int(d.get("x2", 0)) for d in detection_message.get("detections", [])), default=1
+    )
+    image_h = int(detection_message.get("height") or 0) or max(
+        (int(d.get("y2", 0)) for d in detection_message.get("detections", [])), default=1
+    )
 
     for detection in detection_message.get("detections", []):
         # Prefer the real ByteTrack track_id from the worker (integer);
@@ -408,18 +440,21 @@ def process_one(
 
         if evaluate_stationary(track_id, state, timestamp_ms, config):
             state.stationary_event_emitted_ms = timestamp_ms
+            payload = {
+                "class_name": detection.get("class_name", ""),
+                "centroid_x": str(state.points[-1].centroid[0]),
+                "centroid_y": str(state.points[-1].centroid[1]),
+                "window_seconds": str(config.stationary_window_s),
+            }
+            if demote_rules:
+                payload["source"] = "rule-baseline"
             emitted.append(
                 make_event(
                     event_type="stationary_object",
-                    severity="warning",
+                    severity="info" if demote_rules else "warning",
                     camera_id=camera_id,
                     track_id=track_id,
-                    payload={
-                        "class_name": detection.get("class_name", ""),
-                        "centroid_x": str(state.points[-1].centroid[0]),
-                        "centroid_y": str(state.points[-1].centroid[1]),
-                        "window_seconds": str(config.stationary_window_s),
-                    },
+                    payload=payload,
                     timestamp_ms=timestamp_ms,
                 )
             )
@@ -431,22 +466,57 @@ def process_one(
         if bbox_w > 0 and bbox_h > 0 and evaluate_falling(state, timestamp_ms, config, image_h):
             state.falling_event_emitted_ms = timestamp_ms
             ar_now = bbox_h / max(1e-6, bbox_w)
+            payload = {
+                "class_name": detection.get("class_name", ""),
+                "centroid_x": f"{state.points[-1].centroid[0]:.3f}",
+                "centroid_y": f"{state.points[-1].centroid[1]:.3f}",
+                "aspect_ratio_now": f"{ar_now:.3f}",
+                "window_seconds": str(config.falling_window_s),
+            }
+            if demote_rules:
+                payload["source"] = "rule-baseline"
             emitted.append(
                 make_event(
                     event_type="box_falling",
-                    severity="critical",
+                    severity="info" if demote_rules else "critical",
                     camera_id=camera_id,
                     track_id=track_id,
-                    payload={
-                        "class_name": detection.get("class_name", ""),
-                        "centroid_x": f"{state.points[-1].centroid[0]:.3f}",
-                        "centroid_y": f"{state.points[-1].centroid[1]:.3f}",
-                        "aspect_ratio_now": f"{ar_now:.3f}",
-                        "window_seconds": str(config.falling_window_s),
-                    },
+                    payload=payload,
                     timestamp_ms=timestamp_ms,
                 )
             )
+
+        # ── ML trajectory anomaly (primary detector in `ae` mode) ──────
+        if ae_active:
+            cooldown_over = (
+                state.trajectory_anomaly_emitted_ms < 0
+                or (timestamp_ms - state.trajectory_anomaly_emitted_ms)
+                >= config.trajectory_anomaly_cooldown_s * 1000
+            )
+            if cooldown_over:
+                result = scorer.score_track(
+                    track_id, state, timestamp_ms, math.hypot(image_w, image_h)
+                )
+                if result is not None:
+                    state.trajectory_anomaly_emitted_ms = timestamp_ms
+                    emitted.append(
+                        make_event(
+                            event_type="trajectory_anomaly",
+                            severity=result.severity,
+                            camera_id=camera_id,
+                            track_id=track_id,
+                            payload={
+                                "class_name": detection.get("class_name", ""),
+                                "centroid_x": f"{state.points[-1].centroid[0]:.3f}",
+                                "centroid_y": f"{state.points[-1].centroid[1]:.3f}",
+                                "score": f"{result.score:.5f}",
+                                "threshold": f"{result.threshold:.5f}",
+                                "dominant_feature": result.dominant_feature,
+                                "model_version": result.model_version,
+                            },
+                            timestamp_ms=timestamp_ms,
+                        )
+                    )
 
         # Dispatch on the zone's kind: forbidden → critical violation;
         # entry/exit → info event used by the KPI tiles; shelf → silent.
@@ -510,6 +580,22 @@ def run(config: CEPConfig, zones: list[Zone], stop_after: int | None = None) -> 
 
     states: dict[str, TrackState] = defaultdict(TrackState)
     occupancy = ZoneOccupancyAggregator(zones, config) if zones else None
+
+    scorer = None
+    if config.anomaly_mode in ("ae", "both"):
+        from services.stream_processor.anomaly_scorer import AnomalyScorer
+
+        scorer = AnomalyScorer()
+        if not scorer.available:
+            logger.warning(
+                "ANOMALY_MODE=%s but the trajectory-AE artifact is unavailable — "
+                "falling back to rules mode (run notebook 08 to train it).",
+                config.anomaly_mode,
+            )
+            scorer = None
+        else:
+            logger.info("Anomaly mode: %s (trajectory AE loaded)", config.anomaly_mode)
+
     running = True
     n_messages = 0
     n_events = 0
@@ -531,7 +617,7 @@ def run(config: CEPConfig, zones: list[Zone], stop_after: int | None = None) -> 
                 continue
             try:
                 detection_msg = json.loads(msg.value().decode("utf-8"))
-                events = process_one(detection_msg, states, zones, config, occupancy)
+                events = process_one(detection_msg, states, zones, config, occupancy, scorer)
                 for evt in events:
                     producer.produce(
                         config.output_topic,
