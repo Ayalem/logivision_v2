@@ -51,6 +51,14 @@ def code(text: str) -> None:
 md(
     """# 07 — Noisy Student YOLO (teacher → pseudo-labels → bigger student)
 
+> ⚠️ **Dataset note.** The detector switched to **LOCO** (notebook 00). This
+> notebook still uses the Kaggle box labels as the supervised base, and
+> pseudo-labels Pexels footage. For a LOCO-consistent run you need (a) the
+> labelled base repointed to `datasets/processed/loco/data.yaml`, and (b) a
+> **warehouse-domain** unlabeled pool (the truck/highway Pexels clips don't
+> contain pallets/forklifts, so the teacher can't pseudo-label LOCO classes
+> from them). Treat this as future work; notebook 00 is the validated path.
+
 **Production loop.** Every time the warehouse accumulates new
 unlabeled footage, we re-run this notebook to push a fresh
 Production YOLO version. The teacher is always the current

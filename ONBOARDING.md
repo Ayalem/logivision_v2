@@ -121,7 +121,7 @@ Honest summary:
 
 | Feature | Reality |
 |---|---|
-| **Object detection** | **Trained model** — YOLOv8n fine-tuned on Kaggle warehouse-delivery-box, mAP@0.5 measured on the held-out test split |
+| **Object detection** | **Trained model** — YOLOv8n fine-tuned on **LOCO** (real warehouse imagery), mAP@0.5 measured on the held-out scene-separated test split |
 | **Object tracking** | **Library** — ByteTrack from the `trackers` package (Roboflow), no training required |
 | **QR decoding** | **Library** — `pyzbar` wrapping native `libzbar`, deterministic |
 | **Stationary / entry / exit / zone-violation / box-falling** | **Rule-based CEP** — geometric + temporal heuristics, not ML |
@@ -232,9 +232,9 @@ make worker-restart             # picks up the new Production model
 
 ## 10. The model & dataset
 
-- **Dataset on disk**: Kaggle `zoya77/warehouse-delivery-box-detection-dataset` (361 train / 99 val / 61 test images, aerial warehouse boxes). Pulled via `kagglehub`; converted from YOLO-OBB to standard AABB by `scripts/prepare_kaggle_warehouse.py`.
-- **Classes (3)**: `box_small`, `box_medium`, `box_large`.
-- **Model**: YOLOv8n fine-tuned from COCO weights. Hyperparams pinned in `ml/configs/yolov8n.yaml`.
+- **Dataset on disk**: **LOCO** (Logistics Objects in Context, TU München, CC0) — real photos from 5 operating warehouse environments. Fetched by `scripts/fetch_loco.py` (~769 MB), converted COCO→YOLO with a scene-separated split by `scripts/prepare_loco.py` → `datasets/processed/loco/` (2,820 train / 1,075 val / 1,202 test, 151,428 boxes).
+- **Classes (5)**: `small_load_carrier`, `forklift`, `pallet`, `stillage`, `pallet_truck`.
+- **Model**: YOLOv8n fine-tuned from COCO weights. Hyperparams pinned in `ml/configs/yolov8n.yaml`. (Earlier iterations trained on the Kaggle warehouse-delivery-box set; switched to LOCO for real warehouse imagery and richer classes.)
 - **Tracker**: ByteTrack via `trackers.ByteTrackTracker`, one instance per `camera_id`. Defaults: `track_activation_threshold=0.25`, `minimum_consecutive_frames=2`, `frame_rate=5`.
 - **Evaluation**: Notebook 04 (Day 2) reports mAP@0.5 / mAP@0.5:0.95 / per-class P/R on the held-out test split, plus tracking MOTA/IDF1 on a 30-s hand-labelled Camera3 clip.
 
@@ -506,7 +506,7 @@ lake as date-partitioned Parquet → that lake is the "DB used for training".
 |---|---|---|---|
 | Paradigm | Supervised (+ Noisy Student) | Self-supervised regression | **Unsupervised** reconstruction |
 | Model | YOLOv8 + ByteTrack | 2-layer LSTM | GRU autoencoder |
-| Training data | Kaggle labels + pseudo-labels | Birmingham occupancy ratios | Pipeline's own normal trajectories |
+| Training data | LOCO real warehouse imagery | Birmingham occupancy ratios | Pipeline's own normal trajectories |
 | Imbalance/label handling | per-class P/R + pseudo-labelling | none (regression) | **no labels** — threshold on recon error |
 | Gate to Production | mAP@0.5 beats teacher | RMSE beats persistence baseline | percentile-threshold sweep vs CEP baseline |
 | Served from | MLflow Registry → inference_worker | committed artifact → API | committed artifact → stream_processor |

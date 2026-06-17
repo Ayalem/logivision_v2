@@ -43,6 +43,14 @@ def code(text: str) -> None:
 md(
     """# 06 — Two-phase fine-tuning of YOLOv8n on warehouse-delivery-box
 
+> ⚠️ **Dataset note.** The project's detector switched to **LOCO** (notebook
+> 00). This notebook still uses the older Kaggle box dataset. Before training
+> a model you intend to register, repoint its data cell to
+> `datasets/processed/loco/data.yaml` (run `fetch_loco.py` + `prepare_loco.py`)
+> — otherwise it registers a box-class model inconsistent with the live LOCO
+> detector. The two-phase recipe (freeze backbone → unfreeze) is
+> dataset-agnostic.
+
 **Goal.** Adapt YOLOv8n (pretrained on COCO) to warehouse imagery via
 the classical 2-phase transfer-learning recipe (Howard & Ruder 2018,
 ULMFiT). Compare against the no-freeze baseline trained by notebook
