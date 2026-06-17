@@ -1,7 +1,7 @@
 """Complex Event Processing on the `detections` stream → emits `events`.
 
-PROJECT_PLAN.md §6.3 describes 3 Flink jobs (stationary_detection, zone_violation,
-kpi_aggregator). Running a full Flink cluster locally is heavy; this module
+`services/flink-jobs/` holds the production Flink jobs (stationary_detection,
+zone_violation, kpi_aggregator). Running a full Flink cluster locally is heavy; this module
 ships the same logic as a single Python process backed by an in-process
 state store. It is *good enough* for the academic demo and for local
 development; the production deployment would replace this with the PyFlink

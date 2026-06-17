@@ -78,5 +78,5 @@ and dashboard wiring.
 - **Demo with the Python CEP** (today, working end-to-end).
 - **Defend the Flink jobs as the production architecture** — code is here,
   schema gap is documented, upgrade path is explicit.
-- This matches PROJECT_PLAN.md §6 which positions the single-process CEP as the
-  academic demo and the PyFlink jobs as the deployment target.
+- This matches the roadmap in ONBOARDING.md, which positions the single-process
+  CEP as the academic demo and the PyFlink jobs as the deployment target.

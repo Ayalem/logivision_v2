@@ -3,15 +3,12 @@
 > Real-time warehouse computer-vision platform.
 > Video → Kafka → YOLO + ByteTrack → QR → CEP → live operator dashboard.
 
-This single document is the project onboarding guide *and* the master
-technical reference. Read top-to-bottom; jump to **Get Started** at the
-bottom when you're ready to run the demo.
-
-> For the **layered (Lambda) architecture** view — all seven layers, the
-> online/offline split, the model-promotion lifecycle (shadow/canary),
-> active learning, and the production upgrade paths — see
-> [`ARCHITECTURE.md`](ARCHITECTURE.md). This file covers the *current
-> runtime*; that file covers the *design and where it scales to*.
+**This is the single source of truth for the project** — onboarding guide,
+architecture reference, roadmap, contribution workflow, and licenses, all in
+one file. Read top-to-bottom; jump to **Get Started** at the bottom when
+you're ready to run the demo. (The old `ARCHITECTURE.md`, `PROJECT_PLAN.md`,
+`CONTRIBUTING.md`, and `NOTICE.md` were folded in here; their history is in
+git if you need the originals.)
 
 ---
 
@@ -312,3 +309,143 @@ Refresh the Caméras view — CAM03 now shows real bounding boxes from our fine-
 - Sidebar active state is subtle — make it more obvious with a left-rail accent.
 
 This work is tracked as **D2.2 (Frontend visual polish)** in §7 of this file. Open a PR against `main` with the title `feat(frontend): <what you changed>`. The CI must go green; one reviewer + a clean diff and you're in.
+
+---
+
+# Layered (Lambda) architecture
+
+The system is a **layered architecture** with a **Lambda** split: a real-time
+*speed layer* (Kafka → stream processing → serving → dashboard) and a batch
+*offline layer* (data lake → training → registry) that meet at the feature
+store and model registry. The current demo runtime is one instantiation;
+every layer names its production upgrade path so the design scales without
+changing the contracts (Kafka topics, bucket layout, registry names).
+
+| # | Layer | Demo runtime | Production target |
+|---|---|---|---|
+| 1 | **Ingestion** | `frame_grabber` (2–5 fps, JPEG) | RTSP workers, autoscaled |
+| 2 | **Transport** | **Kafka** (KRaft) + Apicurio schema registry | Multi-broker Kafka |
+| 3 | **Storage** | **MinIO** (frames + artifacts) | S3 + Redis (online features) + Parquet lake |
+| 4 | **Stream processing** | Python **CEP** (`cep.py`) | **Flink** (`services/flink-jobs/`) |
+| 5 | **Model serving** | in-process (worker, API LSTM, anomaly scorer) | **BentoML / Triton / KServe** |
+| 6 | **Delivery / API** | **FastAPI** (REST + WS + MJPEG) | API gateway + WS cluster |
+| 7 | **Presentation** | **React + R3F** SPA | same, CDN-served |
+
+Cross-cutting: **MLOps plane** (MLflow registry, DVC datasets, training
+pipelines) and **observability** (Prometheus + Grafana + MLflow + drift
+reports). **This is Lambda**; the consolidation path is **Kappa** (one
+streaming engine, replay the Kafka log instead of a separate batch layer).
+
+### Slide-ready diagrams
+
+```mermaid
+flowchart LR
+  subgraph SPEED["⚡ Speed / Online (ms–s)"]
+    direction LR
+    CAM[Cameras] --> FG[frame_grabber] --> K[(Kafka)]
+    FG -. JPEG .-> OBJ[(MinIO)]
+    K --> SP[Stream proc<br/>Flink / CEP] --> SRV[Model serving] --> API[FastAPI] --> UI[React + R3F]
+    SP --> RED[(Redis<br/>online features)]
+  end
+  subgraph BATCH["🗄️ Batch / Offline (hours–weeks)"]
+    direction LR
+    LAKE[(Data lake)] --> SPARK[Spark] --> OFF[(Offline features)]
+    LAKE --> LBL[Labelling +<br/>active learning] --> DS[Versioned data<br/>DVC] --> TRN[Training] --> REG[(MLflow registry)]
+  end
+  K -. sink connector .-> LAKE
+  REG -. promote weights .-> SRV
+```
+
+```mermaid
+flowchart LR
+  FG[frame_grabber] -- raw-frames --> IW[inference_worker<br/>YOLO + ByteTrack]
+  FG -. JPEG .-> M[(MinIO)]
+  IW -- detections --> QR[qr_decoder] -- qr-decodes --> CEP[stream_processor<br/>CEP + anomaly_scorer]
+  IW -- detections --> CEP
+  CEP -- zone-occupancy --> LSTM[API LSTM forecast]
+  CEP -- events --> WS[API WebSocket]
+  LSTM --> UI[Dashboard]
+  WS --> UI
+```
+
+### The three models (independent lifecycles, composed by topics)
+
+| | Box detection | Congestion forecast | Trajectory anomaly |
+|---|---|---|---|
+| Paradigm | Supervised (+ Noisy Student) | Self-supervised regression | **Unsupervised** reconstruction |
+| Model | YOLOv8 + ByteTrack | 2-layer LSTM | GRU autoencoder |
+| Training data | **LOCO** real warehouse imagery | Birmingham occupancy (real) | pipeline's own trajectories |
+| Served from | MLflow registry → worker | committed artifact → API | committed artifact → stream_processor |
+| Promotion gate | mAP vs current Production | RMSE vs persistence | recon-error percentile vs CEP baseline |
+
+### Model promotion lifecycle (shadow → canary → promote)
+
+- **Shadow**: new model sees 100% of traffic, outputs **logged only** — validate against live data, zero user risk.
+- **Canary**: new model serves a small slice that *is* used; automated metric comparison; **auto-rollback** on regression.
+- **Promote**: only after passing the held-out gate; old version demoted to Staging/Archived (the rollback target), never deleted.
+
+Honest data note: detector training data is **real** (LOCO); the camera *video*
+feed is synthetic (TalTech, until real CCTV is sourced); congestion uses real
+occupancy data transferred to warehouse zones. No synthetic data is presented
+as real model output on the dashboard.
+
+---
+
+# Roadmap (phases)
+
+The original detailed 5-phase plan lived in `PROJECT_PLAN.md` (now in git
+history). Condensed status:
+
+| Phase | Scope | Status |
+|---|---|---|
+| **1 — MLOps Computer Vision** | YOLO+ByteTrack, MLflow registry, DVC, Colab training, eval gates | ✅ core done |
+| **2 — Streaming (Kafka + Flink)** | Kafka pipeline + CEP live; PyFlink jobs schema-aligned, not yet wired | 🟡 CEP live, Flink pending (`services/flink-jobs/STATUS.md`) |
+| **3 — Feature Store (Feast)** | Redis online + Parquet offline | ⬜ future (features computed on the fly today) |
+| **4 — Advanced serving & monitoring** | BentoML, drift, A/B / canary | ⬜ future |
+| **5 — Infra & CI/CD** | K3s, observability, security scans | 🟡 CI (ruff+pytest) live; rest future |
+
+---
+
+# Contributing & workflow
+
+**Single-branch on `main`.** The repo owner commits straight to `main`
+(Conventional, atomic, every commit shippable). Collaborators never push to
+`main` — open a PR from a short-lived `feature/*`/`fix/*` branch, get one
+approval, squash-merge. Branch protection enforces this (require PR + 1
+approval, no force-push, no deletions).
+
+**Conventional Commits**: `<type>(<scope>): <summary>`, types `feat fix chore
+docs test refactor perf build ci revert`. The `commit-msg` hook enforces it.
+(Note: the pre-commit `trailing-whitespace`/format hooks rewrite files after
+staging — if a commit shows "nothing to commit", re-stage and re-commit.)
+
+```bash
+make install            # uv sync dev deps
+make pre-commit-install # git hooks
+make lint               # ruff + mypy
+make test               # pytest  (155+ tests; flink-jobs run separately)
+make format             # auto-fix
+```
+
+Python **3.11**. Service code is `mypy --strict`; ML scripts/notebooks are
+more permissive. New services expose `/health` + `/metrics` and log JSON.
+Significant design decisions go in `docs/architecture/adr/NNNN-title.md`
+(MADR). Never commit secrets — `.env` is gitignored, `detect-secrets` +
+`gitleaks` run in pre-commit.
+
+---
+
+# Licenses & third-party notices
+
+LOGIVISION is **MIT** (see `LICENSE`). Key third-party components:
+
+**Ultralytics (YOLOv8/11) — AGPL-3.0.** Modules that import `ultralytics`
+(inference worker, model server, training scripts) form a combined AGPL work.
+Because the repo is public on GitHub, the source-availability requirement is
+met for this development phase. For a closed-source/commercial deployment,
+swap Ultralytics for a permissively-licensed detector (torchvision, RTMDet,
+DAMO-YOLO) or obtain an Ultralytics Enterprise License.
+
+Other deps — ByteTrack (MIT), FastAPI (MIT), React (MIT), and OpenVINO,
+MLflow, DVC, Kafka/Flink, Feast, BentoML, Evidently (all Apache-2.0) — impose
+no copyleft obligations.
