@@ -142,15 +142,18 @@ print('LOCO is CC0 public domain — no Kaggle/login needed.')
 # Cell 4 - download dataset
 code(
     """# 4. Download LOCO — real warehouse imagery (~769 MB, CC0, no login).
-#    Import + call main() so any real error prints HERE (a subprocess hides it
-#    behind a generic CalledProcessError). fetch_loco validates the zip and
-#    retries on a dropped connection — if it still fails, just re-run the cell.
-import fetch_loco
-rc = fetch_loco.main([])
-if rc:
-    raise RuntimeError(f'fetch_loco failed (code {rc}) — read the message above. '
-                       'Usually a flaky download; re-running this cell fixes it.')
-print('LOCO downloaded + extracted under datasets/raw/loco/')
+#    Run as a subprocess with an explicit repo path (robust to cwd / sys.path).
+#    fetch_loco's log + any error stream into this cell; it validates the zip
+#    and retries a dropped connection — if it still fails, just re-run the cell.
+import subprocess, sys, pathlib
+REPO = pathlib.Path('/content/logivision_v2')
+if not (REPO / 'scripts' / 'fetch_loco.py').is_file():
+    REPO = pathlib.Path.cwd()
+r = subprocess.run([sys.executable, str(REPO / 'scripts' / 'fetch_loco.py')], cwd=str(REPO))
+if r.returncode:
+    raise SystemExit(f'fetch_loco failed (exit {r.returncode}) — read the log above. '
+                     'Usually a flaky download; just re-run this cell.')
+print('LOCO ready under', REPO / 'datasets/raw/loco')
 """
 )
 
@@ -162,12 +165,15 @@ code(
 #    subset (train = 2,3,5 / val = 1 / test = 4) guarantees no scene leaks
 #    across splits — the honest, leak-free evaluation setup. Classes:
 #    small_load_carrier, forklift, pallet, stillage, pallet_truck.
-import pathlib, prepare_loco
-rc = prepare_loco.main(['--symlink'])
-if rc:
-    raise RuntimeError(f'prepare_loco failed (code {rc}) — read the message above.')
+import subprocess, sys, pathlib
+REPO = pathlib.Path('/content/logivision_v2')
+if not (REPO / 'scripts' / 'prepare_loco.py').is_file():
+    REPO = pathlib.Path.cwd()
+r = subprocess.run([sys.executable, str(REPO / 'scripts' / 'prepare_loco.py'), '--symlink'], cwd=str(REPO))
+if r.returncode:
+    raise SystemExit(f'prepare_loco failed (exit {r.returncode}) — read the log above.')
 
-DATA_YAML = pathlib.Path('datasets/processed/loco/data.yaml').resolve()
+DATA_YAML = (REPO / 'datasets/processed/loco/data.yaml').resolve()
 print('LOCO data.yaml:', DATA_YAML)
 print(DATA_YAML.read_text())
 """
