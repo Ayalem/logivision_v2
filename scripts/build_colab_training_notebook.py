@@ -74,10 +74,14 @@ import os, sys, subprocess, pathlib
 IN_COLAB = 'google.colab' in sys.modules
 print(f'Running on Colab: {IN_COLAB}')
 if IN_COLAB:
-    if not pathlib.Path('logivision_v2').is_dir():
+    # ABSOLUTE path + explicit clone target → idempotent. Re-running this cell
+    # (e.g. after the cell-2 runtime restart) always lands in the same dir and
+    # never nests a second logivision_v2/ inside the first.
+    REPO_DIR = pathlib.Path('/content/logivision_v2')
+    if not REPO_DIR.is_dir():
         subprocess.run(['git', 'clone', '--depth=1',
-                        'https://github.com/Ayalem/logivision_v2.git'], check=True)
-    os.chdir('logivision_v2')
+                        'https://github.com/Ayalem/logivision_v2.git', str(REPO_DIR)], check=True)
+    os.chdir(REPO_DIR)
     print('cwd:', pathlib.Path.cwd())
 
 # Critical: put the repo root + scripts/ on sys.path so `import services.*`
