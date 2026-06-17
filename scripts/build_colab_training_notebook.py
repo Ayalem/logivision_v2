@@ -34,32 +34,31 @@ def code(text: str) -> None:
 md(
     """# LOGIVISION — Train YOLOv8 on Google Colab (T4)
 
-**Purpose.** Fine-tune YOLOv8n on the Kaggle warehouse-delivery-box
-dataset using a free Colab T4 GPU. 50 epochs at 640 px takes **~25
-minutes on T4**, vs ~4 hours on an M3 CPU.
+**Purpose.** Fine-tune YOLOv8n on the **LOCO** real-warehouse dataset
+using a free Colab T4 GPU. 50 epochs at 640 px takes **~25 minutes on
+T4**, vs hours on an M3 CPU.
 
 ## Before you run
 
 1. *Runtime → Change runtime type → T4 GPU* (confirm top-right).
-2. Have your Kaggle API key handy
-   (https://www.kaggle.com/settings/account → "Create New Token").
-3. Add the key to Colab Secrets:
-   *Colab left sidebar → key icon → add secret*
-   - `KAGGLE_USERNAME` = your Kaggle username
-   - `KAGGLE_KEY` = the long hex string in the downloaded `kaggle.json`
-   - Toggle **Notebook access** ON for both.
+2. That's it — **no credentials needed**. LOCO is public-domain (CC0),
+   so the download cell needs no Kaggle/login setup.
 
 ## What this notebook does
+
+Trains on **LOCO** (Logistics Objects in Context) — real photos from five
+operating warehouse environments. Classes: `small_load_carrier, forklift,
+pallet, stillage, pallet_truck`.
 
 | Cell | Step | Time on T4 |
 |---|---|---|
 | 1 | Detect Colab; clone repo (depth=1) | 5 s |
-| 2 | Install ultralytics, kagglehub, pyyaml | 30 s |
-| 3 | Set Kaggle creds from Colab Secrets | <1 s |
-| 4 | Download Kaggle dataset (~860 MB) | 1-3 min |
-| 5 | Convert OBB labels → AABB (uses `scripts/prepare_kaggle_warehouse.py`) | 10 s |
+| 2 | Install ultralytics, pyyaml, mlflow | 30 s |
+| 3 | (no-op — LOCO needs no credentials) | <1 s |
+| 4 | Download LOCO (~769 MB, CC0) | 1-3 min |
+| 5 | Convert COCO → YOLO, scene-separated split (`scripts/prepare_loco.py`) | 20 s |
 | 6 | Train YOLOv8n: 50 epochs, imgsz=640, batch=32, AdamW, cos_lr | **~25 min** |
-| 7 | Validate on the held-out test split | 30 s |
+| 7 | Validate on the held-out test split (subset 4 — unseen warehouse) | 30 s |
 | 8 | Plot training curves | 5 s |
 | 9 | Download `best.pt` + `results.csv` to your machine | 5 s |
 
@@ -82,18 +81,18 @@ if IN_COLAB:
     print('cwd:', pathlib.Path.cwd())
 
 # Critical: put the repo root + scripts/ on sys.path so `import services.*`
-# and `import prepare_kaggle_warehouse` resolve to the cloned files.
-# Without this Python only searches site-packages — `pip install services`
-# would install an UNRELATED PyPI package; do not do that.
+# resolves to the cloned files. Without this Python only searches
+# site-packages — `pip install services` would install an UNRELATED PyPI
+# package; do not do that.
 REPO = pathlib.Path.cwd().resolve()
 for p in (str(REPO), str(REPO / 'scripts')):
     if p not in sys.path:
         sys.path.insert(0, p)
 print('sys.path[0:3] =', sys.path[:3])
 
-# Sanity: confirm we can see the dataset prep script + the services pkg.
-assert pathlib.Path('scripts/prepare_kaggle_warehouse.py').is_file(), \\
-    'prepare_kaggle_warehouse.py missing - did the repo clone correctly?'
+# Sanity: confirm we can see the LOCO fetch script + the services pkg.
+assert pathlib.Path('scripts/fetch_loco.py').is_file(), \\
+    'fetch_loco.py missing - did the repo clone correctly?'
 assert pathlib.Path('services/model_server/service.py').is_file(), \\
     'services/model_server/service.py missing - your clone is stale; re-run git clone'
 
@@ -108,83 +107,57 @@ if torch.cuda.is_available():
 
 # Cell 2 - deps
 code(
-    """# 2. Install the deps we actually need. Skip the rest of the repo's
-#    dev dependencies — keeps install under 30 s.
-%pip install -q ultralytics==8.3.0 kagglehub==0.3.0 pyyaml==6.0.1 mlflow==2.17.0
-print('deps installed')
+    """# 2. Install deps. Colab pre-imports numpy; installing ultralytics can
+#    swap numpy under already-loaded C extensions (torch/opencv), causing the
+#    "numpy.dtype size changed" ABI error later. Fix: install, then restart
+#    the runtime ONCE so every binary re-links against a single numpy. The
+#    guard file means the restart only fires on the first run — after it
+#    restarts, just do Runtime -> Run all again.
+%pip install -q ultralytics pyyaml mlflow
+import os, sys, pathlib
+if 'google.colab' in sys.modules:
+    _flag = pathlib.Path('/content/.logivision_deps_ok')
+    if not _flag.exists():
+        _flag.touch()
+        print('Deps installed — restarting runtime once to settle numpy ABI.')
+        print('When it comes back, run Runtime -> Run all again.')
+        os.kill(os.getpid(), 9)
+print('deps ready')
 """
 )
 
 # Cell 3 - kaggle creds
 code(
-    """# 3. Pull Kaggle credentials from Colab Secrets and write ~/.kaggle/kaggle.json.
-import json, os, pathlib
-try:
-    from google.colab import userdata
-    KAGGLE_USERNAME = userdata.get('KAGGLE_USERNAME')
-    KAGGLE_KEY      = userdata.get('KAGGLE_KEY')
-    assert KAGGLE_USERNAME and KAGGLE_KEY, 'Missing Colab secret'
-except (ImportError, Exception) as e:
-    # Local fallback: read from env (works outside Colab too).
-    KAGGLE_USERNAME = os.environ.get('KAGGLE_USERNAME')
-    KAGGLE_KEY      = os.environ.get('KAGGLE_KEY')
-    assert KAGGLE_USERNAME and KAGGLE_KEY, (
-        f'No Kaggle credentials found ({e}). '
-        'Add KAGGLE_USERNAME and KAGGLE_KEY as Colab secrets (toggle Notebook access).'
-    )
-
-# Hand the creds to kagglehub via the canonical kaggle.json location.
-kj = pathlib.Path.home() / '.kaggle' / 'kaggle.json'
-kj.parent.mkdir(exist_ok=True)
-kj.write_text(json.dumps({'username': KAGGLE_USERNAME, 'key': KAGGLE_KEY}))
-os.chmod(kj, 0o600)
-print('kaggle.json written; username =', KAGGLE_USERNAME)
+    """# 3. LOCO is public-domain (CC0) — no credentials required.
+#    (This cell is intentionally a no-op; kept so cell numbering matches
+#    the guide and any older instructions.)
+print('LOCO is CC0 public domain — no Kaggle/login needed.')
 """
 )
 
 # Cell 4 - download dataset
 code(
-    """# 4. Download the dataset (~860 MB). kagglehub caches under ~/.cache/kagglehub.
-import kagglehub
-DATASET_PATH = kagglehub.dataset_download('zoya77/warehouse-delivery-box-detection-dataset')
-print('downloaded to:', DATASET_PATH)
-
-# kagglehub returns the dataset root; our converter expects the
-# 'Box Dataset/' subdirectory underneath.
-import pathlib
-KAGGLE_BOX = pathlib.Path(DATASET_PATH) / 'Box Dataset'
-assert KAGGLE_BOX.is_dir(), f'Unexpected layout: {list(pathlib.Path(DATASET_PATH).iterdir())}'
-for split in ('train', 'valid', 'test'):
-    n = len(list((KAGGLE_BOX / split / 'images').glob('*')))
-    print(f'  {split:<5}: {n:>5} images')
+    """# 4. Download LOCO — real warehouse imagery (~769 MB, CC0, no login).
+#    5,593 photos from 5 operating logistics environments.
+import subprocess, sys
+subprocess.run([sys.executable, 'scripts/fetch_loco.py'], check=True)
+print('LOCO downloaded + extracted under datasets/raw/loco/')
 """
 )
 
 # Cell 5 - convert + scene-aware re-split
 code(
-    """# 5. Convert OBB labels -> axis-aligned bbox + RE-SPLIT BY SCENE.
+    """# 5. Convert LOCO (COCO) -> YOLO with a SCENE-SEPARATED split.
 #
-#    The Kaggle dataset's default train/val/test split has temporal
-#    contamination: sequential frames of the same flight scattered
-#    across all three splits. A model trained on frame 4293 trivially
-#    recognises frame 4294 (test) — inflates mAP@0.5 to ~99% which is
-#    NOT real generalisation.
-#
-#    Fix: after the OBB->AABB conversion, run scripts/reshuffle_splits_by_scene.py
-#    to group entire scenes into one split. The clean dataset lives at
-#    data/processed/kaggle_warehouse_clean/. This is what we train on.
-import importlib, sys, subprocess
-sys.path.insert(0, 'scripts')
-import prepare_kaggle_warehouse as prep
-prep.ROOT = KAGGLE_BOX                      # point at the Colab cache
-prep.OUT  = pathlib.Path('data/processed/kaggle_warehouse')
-prep.main()
+#    Each LOCO subset is a distinct warehouse environment, so splitting by
+#    subset (train = 2,3,5 / val = 1 / test = 4) guarantees no scene leaks
+#    across splits — the honest, leak-free evaluation setup. Classes:
+#    small_load_carrier, forklift, pallet, stillage, pallet_truck.
+import subprocess, sys, pathlib
+subprocess.run([sys.executable, 'scripts/prepare_loco.py'], check=True)
 
-# Scene-aware re-split (the honest train/val/test).
-subprocess.run([sys.executable, 'scripts/reshuffle_splits_by_scene.py'], check=True)
-
-DATA_YAML = pathlib.Path('data/processed/kaggle_warehouse_clean/data.yaml').resolve()
-print('clean data.yaml:', DATA_YAML)
+DATA_YAML = pathlib.Path('datasets/processed/loco/data.yaml').resolve()
+print('LOCO data.yaml:', DATA_YAML)
 print(DATA_YAML.read_text())
 """
 )
@@ -193,7 +166,7 @@ print(DATA_YAML.read_text())
 code(
     """# 6. Train. ~25 min on T4.
 #    Hyperparameters chosen for the soutenance demo:
-#      - 50 epochs (good convergence on 361 train images)
+#      - 50 epochs (good convergence on 2,820 LOCO train images)
 #      - imgsz=640 (production size; not the 320 demo size)
 #      - batch=32 (T4 has 16 GB - safe headroom; bump to 48 if you want)
 #      - cos_lr=True (anneals smoothly; matches ULMFiT recipe)
@@ -207,8 +180,8 @@ try:
     DATA_YAML
 except NameError:
     import pathlib
-    # Recover the CLEAN (scene-aware) yaml — never the original leaky split.
-    DATA_YAML = pathlib.Path('data/processed/kaggle_warehouse_clean/data.yaml').resolve()
+    # Recover the scene-separated LOCO yaml written by cell 5.
+    DATA_YAML = pathlib.Path('datasets/processed/loco/data.yaml').resolve()
     if not DATA_YAML.is_file():
         raise FileNotFoundError(
             f'{DATA_YAML} not found — please run cells 1-5 (Runtime -> Run all).'
@@ -229,7 +202,7 @@ results = model.train(
     patience=15,
     device=0,
     project='runs',
-    name='colab_kaggle_50ep',
+    name='colab_loco_50ep',
     exist_ok=True,
     verbose=False,
     plots=True,
@@ -260,7 +233,7 @@ code(
 import pandas as pd
 import matplotlib.pyplot as plt
 
-candidates = sorted(pathlib.Path('runs').glob('**/colab_kaggle_50ep'))
+candidates = sorted(pathlib.Path('runs').glob('**/colab_loco_50ep'))
 run_dir = next((p for p in candidates if (p / 'results.csv').is_file()), None)
 if run_dir is None:
     run_dir = next((p for p in candidates if (p / 'weights' / 'best.pt').is_file()), None)
@@ -299,7 +272,7 @@ code(
 import shutil
 from datetime import datetime
 
-candidates = sorted(pathlib.Path('runs').glob('**/colab_kaggle_50ep'))
+candidates = sorted(pathlib.Path('runs').glob('**/colab_loco_50ep'))
 run_dir = next((p for p in candidates if (p / 'results.csv').is_file()), None)
 if run_dir is None:
     run_dir = next((p for p in candidates if (p / 'weights' / 'best.pt').is_file()), None)
@@ -356,7 +329,7 @@ next refresh. Detections start using the Colab-trained weights in ~10 s.
 
 | Symptom | Fix |
 |---|---|
-| `KAGGLE_USERNAME` secret missing | Add it in the Colab sidebar (key icon), toggle Notebook access ON, re-run cell 3 |
+| LOCO download fails (cell 4) | Re-run the cell; the TUM link is occasionally slow. Check Colab has internet. |
 | `CUDA out of memory` | Drop `batch=32` to `batch=16` in cell 6 |
 | Training stalls at 0 mAP after 5+ epochs | Re-check `data.yaml` — classes/paths must match what cell 5 wrote |
 | `files.download()` does nothing | Click the file panel on the left, right-click the zip, "Download" |

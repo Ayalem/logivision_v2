@@ -6,7 +6,7 @@ model:
   arch: yolov8n
   weights: yolov8n.pt
 data:
-  yaml_path: data/processed/kaggle_warehouse/data.yaml
+  yaml_path: datasets/processed/loco/data.yaml
 hyperparameters:
   epochs: 10
   imgsz: 320

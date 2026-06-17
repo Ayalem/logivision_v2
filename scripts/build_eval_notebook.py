@@ -63,7 +63,31 @@ the key reviewer question: "does your mAP translate to real deployment?".
 )
 
 md(
-    """## 0. Environment
+    """## 0. Setup — clone repo + install deps (run me FIRST)
+
+This cell must run **before** the Environment cell. On Colab the working
+directory starts at `/content` (no repo), so we clone the repo and `cd`
+into it first; otherwise the repo-root search below climbs to `/` and the
+notebook fails trying to write artifacts to the filesystem root. Off Colab
+it is a safe no-op.
+"""
+)
+code(
+    """import sys, os, pathlib
+
+IN_COLAB = 'google.colab' in sys.modules
+if IN_COLAB:
+    REPO_DIR = pathlib.Path('/content/logivision_v2')
+    if not REPO_DIR.is_dir():
+        !git clone --depth 1 https://github.com/Ayalem/logivision_v2.git {REPO_DIR}
+    os.chdir(REPO_DIR)
+    %pip install -q ultralytics==8.3.0 kagglehub==0.3.0 pyyaml==6.0.1 opencv-python-headless==4.10.0.84
+print('cwd:', os.getcwd(), '| colab:', IN_COLAB)
+"""
+)
+
+md(
+    """## 1. Environment
 """
 )
 code(
@@ -72,10 +96,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 
-# Locate repo root
+# Locate repo root by walking up to the pyproject.toml. After the Section 0
+# bootstrap has chdir'd into the clone this resolves correctly; off Colab it
+# works from anywhere inside the repo.
 REPO = pathlib.Path.cwd().resolve()
 while not (REPO / 'pyproject.toml').is_file() and REPO != REPO.parent:
     REPO = REPO.parent
+if not (REPO / 'pyproject.toml').is_file():
+    raise RuntimeError(
+        f'Repo root not found from {pathlib.Path.cwd()}. '
+        'Run the Section 0 bootstrap cell first (it clones the repo + cd into it).'
+    )
 print('Repo root:', REPO)
 
 for p in (str(REPO), str(REPO / 'scripts')):
@@ -85,24 +116,6 @@ for p in (str(REPO), str(REPO / 'scripts')):
 EVAL_DIR = REPO / 'ml' / 'artifacts' / 'eval'
 EVAL_DIR.mkdir(parents=True, exist_ok=True)
 print('Eval artifacts:', EVAL_DIR)
-"""
-)
-
-md(
-    """## 1. Install deps + set up repo (Colab only)
-"""
-)
-code(
-    """import pathlib, os
-IN_COLAB = 'google.colab' in sys.modules
-if IN_COLAB:
-    REPO_DIR = pathlib.Path('/content/logivision_v2')
-    if not REPO_DIR.is_dir():
-        !git clone --depth 1 https://github.com/Ayalem/logivision_v2 {REPO_DIR}
-    os.chdir(REPO_DIR)
-
-%pip install -q ultralytics==8.3.0 kagglehub==0.3.0 pyyaml==6.0.1 opencv-python-headless==4.10.0.84
-print('deps ok')
 """
 )
 
@@ -139,56 +152,45 @@ if MODEL_PT is None:
     except Exception as e:
         print(f'MLflow not reachable ({e}), using COCO baseline')
 
+USING_FALLBACK = False
 if MODEL_PT is None:
     MODEL_PT = 'yolov8n.pt'
-    print('WARNING: using COCO yolov8n as fallback — register a trained model first')
+    USING_FALLBACK = True
+    print('WARNING: no warehouse-trained model found (no local checkpoint, MLflow unreachable).')
+    print('Falling back to COCO yolov8n. Part A (mAP) will be SKIPPED — COCO classes do')
+    print('not match the warehouse classes, so the number would be meaningless.')
+    print('To get a real mAP: have the MLflow stack up, or upload best.pt to')
+    print('ml/artifacts/yolo_teacher/best.pt before running.')
 
 model = YOLO(str(MODEL_PT))
-print('Model loaded:', MODEL_PT)
+print('Model loaded:', MODEL_PT, '(COCO fallback)' if USING_FALLBACK else '(warehouse-trained)')
 """
 )
 
 md(
-    """## Part A — Quantitative evaluation on Kaggle clean test split
+    """## Part A — Quantitative evaluation on the LOCO test split
 
-Runs `model.val()` on the **scene-aware** held-out test split.
-If the clean split does not exist locally, we rebuild it from the
-Kaggle dataset (requires Kaggle credentials).
+Runs `model.val()` on the **scene-separated** held-out test split (LOCO
+subset 4 — a warehouse never seen in training). If the YOLO dataset is
+not present locally it is rebuilt with `fetch_loco.py` + `prepare_loco.py`
+(no credentials — LOCO is CC0 public domain).
 """
 )
 code(
-    """CLEAN_YAML = REPO / 'data' / 'processed' / 'kaggle_warehouse_clean' / 'data.yaml'
+    """CLEAN_YAML = REPO / 'datasets' / 'processed' / 'loco' / 'data.yaml'
 
-if not CLEAN_YAML.is_file():
-    print('Clean split not found — rebuilding from Kaggle ...')
-    import json as _json, os as _os, subprocess
-
-    try:
-        from google.colab import userdata
-        un, key = userdata.get('KAGGLE_USERNAME'), userdata.get('KAGGLE_KEY')
-    except Exception:
-        un, key = _os.environ.get('KAGGLE_USERNAME'), _os.environ.get('KAGGLE_KEY')
-
-    if un and key:
-        kj = pathlib.Path.home() / '.kaggle' / 'kaggle.json'
-        kj.parent.mkdir(exist_ok=True)
-        kj.write_text(_json.dumps({'username': un, 'key': key}))
-        _os.chmod(kj, 0o600)
-
-        import kagglehub
-        ds_path = kagglehub.dataset_download('zoya77/warehouse-delivery-box-detection-dataset')
-        import prepare_kaggle_warehouse as prep
-        prep.ROOT = pathlib.Path(ds_path) / 'Box Dataset'
-        prep.OUT  = REPO / 'data' / 'processed' / 'kaggle_warehouse'
-        prep.main()
-
-        subprocess.run([sys.executable, 'scripts/reshuffle_splits_by_scene.py'], check=True)
-        print('Clean split built.')
-    else:
-        print('No Kaggle credentials — skipping Part A.')
-        CLEAN_YAML = None
+if USING_FALLBACK:
+    print('Skipping Part A — no warehouse-trained model is loaded (see Section 2).')
+    print('A COCO model evaluated on warehouse classes would report a meaningless mAP.')
+    CLEAN_YAML = None
+elif not CLEAN_YAML.is_file():
+    print('LOCO YOLO dataset not found — building it (fetch + convert, ~769 MB) ...')
+    import subprocess
+    subprocess.run([sys.executable, 'scripts/fetch_loco.py'], check=True)
+    subprocess.run([sys.executable, 'scripts/prepare_loco.py'], check=True)
+    print('LOCO dataset built.')
 else:
-    print('Using cached clean split:', CLEAN_YAML)
+    print('Using cached LOCO dataset:', CLEAN_YAML)
 
 if CLEAN_YAML and CLEAN_YAML.is_file():
     print('\\n--- Running val on clean test split ---')
@@ -206,7 +208,7 @@ if CLEAN_YAML and CLEAN_YAML.is_file():
     with open(EVAL_DIR / 'quantitative.json', 'w') as f:
         json.dump({
             'model': str(MODEL_PT),
-            'split': 'kaggle_warehouse_clean/test (scene-aware, no temporal leakage)',
+            'split': 'loco/test (subset 4 — scene-separated, no cross-scene leakage)',
             'metrics': quant,
         }, f, indent=2)
     print('Saved:', EVAL_DIR / 'quantitative.json')
