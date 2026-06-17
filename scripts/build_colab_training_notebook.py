@@ -81,6 +81,11 @@ if IN_COLAB:
     if not REPO_DIR.is_dir():
         subprocess.run(['git', 'clone', '--depth=1',
                         'https://github.com/Ayalem/logivision_v2.git', str(REPO_DIR)], check=True)
+    else:
+        # Already cloned — force-update the shallow clone to the latest main so
+        # script fixes land without re-cloning (check=False: skip if offline).
+        subprocess.run(['git', '-C', str(REPO_DIR), 'fetch', '--depth=1', 'origin', 'main'], check=False)
+        subprocess.run(['git', '-C', str(REPO_DIR), 'reset', '--hard', 'origin/main'], check=False)
     os.chdir(REPO_DIR)
     print('cwd:', pathlib.Path.cwd())
 
