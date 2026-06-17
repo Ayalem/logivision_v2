@@ -6,6 +6,7 @@ import { useCameras } from '@/lib/api'
 import { AnalyticalCameraFeed } from '@/components/cameras/AnalyticalCameraFeed'
 import { KpiStrip } from '@/components/dashboard/KpiStrip'
 import { DigitalTwin } from '@/components/digital-twin/DigitalTwin'
+import { FloorMap } from '@/components/digital-twin/FloorMap'
 import { CongestionPanel } from '@/components/predictions/CongestionPanel'
 import { AlertCircle, TrendingUp, Activity } from 'lucide-react'
 import { useTranslation } from '@/lib/i18n'
@@ -19,6 +20,9 @@ export function OverviewPage() {
     <div className="space-y-5">
       {/* Top KPI Strip */}
       <KpiStrip />
+
+      {/* Top-down warehouse floor map + zone detail panel */}
+      <FloorMap />
 
       {/* Hero Section: 3-column layout */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">

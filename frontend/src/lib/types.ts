@@ -19,10 +19,11 @@ export interface Zone {
   occupancy: number       // 0-100
   capacity: number
   currentItems: number
-  status: 'normal' | 'warning' | 'critical'
+  status: 'normal' | 'warning' | 'critical' | 'unknown'
+  live?: boolean          // true when this zone has a live real-time flux
   x: number; y: number; width: number; height: number  // % bbox
   polygon: ZonePolygonPoint[]                          // 0..1 coords
-  lastUpdated: string
+  lastUpdated: string | null
 }
 
 export interface Camera {
