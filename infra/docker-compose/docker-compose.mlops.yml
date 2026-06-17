@@ -21,8 +21,13 @@ services:
     image: minio/minio:RELEASE.2024-10-13T13-34-11Z
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+      # Read the names .env actually defines (MINIO_ROOT_USER/PASSWORD) so the
+      # MinIO server, MLflow, and the pipeline services all share one set of
+      # credentials. Previously this read MINIO_ACCESS_KEY (not in .env), so
+      # MinIO booted as minioadmin while services used `logivision` → S3
+      # InvalidAccessKeyId on every frame upload.
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -41,8 +46,8 @@ services:
     environment:
       MLFLOW_BACKEND_STORE_URI: postgresql://${POSTGRES_USER:-logivision}:${POSTGRES_PASSWORD:-logivision}@postgres:5432/${POSTGRES_DB:-logivision}
       MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://mlflow/
-      AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY:-minioadmin}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MLFLOW_S3_ENDPOINT_URL: http://minio:9000
     # The base image has no default server command, and lacks the Postgres
     # + S3 drivers. Install them, then serve with the Postgres backend store
