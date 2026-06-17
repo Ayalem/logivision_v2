@@ -221,9 +221,11 @@ print(f'mAP@0.5         : {val_results.box.map50:.4f}')
 print(f'mAP@0.5:0.95    : {val_results.box.map:.4f}')
 print(f'mean precision  : {val_results.box.mp:.4f}')
 print(f'mean recall     : {val_results.box.mr:.4f}')
-print('per class:')
+print('per class (mAP@0.5:0.95):')
+maps = val_results.box.maps
 for i, name in val_results.names.items():
-    print(f'  {name:<14} mAP50={val_results.box.maps[i]:.4f}')
+    val = maps[i] if i < len(maps) else float('nan')
+    print(f'  {name:<18} {val:.4f}')
 """
 )
 
@@ -246,22 +248,41 @@ print('using run_dir =', run_dir)
 df = pd.read_csv(run_dir / 'results.csv')
 df.columns = [c.strip() for c in df.columns]
 
+# Ultralytics has renamed results.csv columns across versions; resolve each
+# metric by trying the known aliases so this cell survives version drift.
+def col(*names):
+    for n in names:
+        if n in df.columns:
+            return df[n]
+    return None
+
+ep      = col('epoch')
+map50   = col('metrics/mAP50(B)', 'metrics/mAP_0.5', 'metrics/mAP50')
+map5095 = col('metrics/mAP50-95(B)', 'metrics/mAP_0.5:0.95', 'metrics/mAP50-95')
+prec    = col('metrics/precision(B)', 'metrics/precision')
+rec     = col('metrics/recall(B)', 'metrics/recall')
+
 fig, axes = plt.subplots(1, 2, figsize=(14, 4))
-axes[0].plot(df['epoch'], df['metrics/mAP50(B)'],     label='mAP@0.5',     color='#2563EB', linewidth=2)
-axes[0].plot(df['epoch'], df['metrics/mAP50-95(B)'], label='mAP@0.5:0.95', color='#06B6D4', linewidth=2)
+if map50 is not None:   axes[0].plot(ep, map50,   label='mAP@0.5',     color='#2563EB', linewidth=2)
+if map5095 is not None: axes[0].plot(ep, map5095, label='mAP@0.5:0.95', color='#06B6D4', linewidth=2)
 axes[0].set_xlabel('epoch'); axes[0].set_ylabel('mAP'); axes[0].set_title('Validation mAP')
 axes[0].grid(alpha=0.3); axes[0].legend()
 
-axes[1].plot(df['epoch'], df['train/box_loss'], label='box loss', color='#EF4444')
-axes[1].plot(df['epoch'], df['train/cls_loss'], label='cls loss', color='#F59E0B')
-axes[1].plot(df['epoch'], df['train/dfl_loss'], label='dfl loss', color='#8B5CF6')
+for c, lab, color in [('train/box_loss', 'box loss', '#EF4444'),
+                      ('train/cls_loss', 'cls loss', '#F59E0B'),
+                      ('train/dfl_loss', 'dfl loss', '#8B5CF6')]:
+    s = col(c)
+    if s is not None:
+        axes[1].plot(ep, s, label=lab, color=color)
 axes[1].set_xlabel('epoch'); axes[1].set_ylabel('loss'); axes[1].set_title('Training losses')
 axes[1].grid(alpha=0.3); axes[1].legend()
 plt.tight_layout(); plt.show()
 
-best = df.loc[df['metrics/mAP50(B)'].idxmax()]
-print(f'Best epoch: {int(best.epoch)} -> mAP50={best[\"metrics/mAP50(B)\"]:.3f}, '
-      f'precision={best[\"metrics/precision(B)\"]:.3f}, recall={best[\"metrics/recall(B)\"]:.3f}')
+if map50 is not None:
+    bi = map50.idxmax()
+    p = f'{prec[bi]:.3f}' if prec is not None else 'n/a'
+    r = f'{rec[bi]:.3f}' if rec is not None else 'n/a'
+    print(f'Best epoch: {int(ep[bi])} -> mAP50={map50[bi]:.3f}, precision={p}, recall={r}')
 """
 )
 
