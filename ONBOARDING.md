@@ -7,6 +7,12 @@ This single document is the project onboarding guide *and* the master
 technical reference. Read top-to-bottom; jump to **Get Started** at the
 bottom when you're ready to run the demo.
 
+> For the **layered (Lambda) architecture** view — all seven layers, the
+> online/offline split, the model-promotion lifecycle (shadow/canary),
+> active learning, and the production upgrade paths — see
+> [`ARCHITECTURE.md`](ARCHITECTURE.md). This file covers the *current
+> runtime*; that file covers the *design and where it scales to*.
+
 ---
 
 ## Your Setup Checklist

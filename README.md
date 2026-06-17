@@ -1,8 +1,8 @@
 # LOGIVISION
 
-Production-grade intelligent warehouse surveillance built on Computer Vision (YOLO + ByteTrack) and a fully open-source MLOps stack (MLflow, DVC, Kafka, Flink, Feast, BentoML, K3s).
+Intelligent warehouse surveillance built on Computer Vision (YOLO + ByteTrack) and an open-source MLOps stack. The demo runtime ships MLflow, DVC, and Kafka with an in-process CEP; Flink, Feast, BentoML, and K3s are the documented production-target upgrade paths (see [`ARCHITECTURE.md`](ARCHITECTURE.md)).
 
-The full execution plan — phases, sprints, acceptance criteria, technology choices — lives in [`PROJECT_PLAN.md`](PROJECT_PLAN.md). Read it before contributing.
+The layered (Lambda) architecture — every layer, the online/offline split, the model lifecycle, and the production upgrade paths — lives in [`ARCHITECTURE.md`](ARCHITECTURE.md). The full execution plan — phases, sprints, acceptance criteria, technology choices — lives in [`PROJECT_PLAN.md`](PROJECT_PLAN.md). Read both before contributing.
 
 ## Current status
 
