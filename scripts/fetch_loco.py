@@ -55,6 +55,18 @@ CITATION = (
     "IEEE ICMLA 2020. Dataset: https://github.com/tum-fml/loco"
 )
 
+# The COCO annotations are NOT in the image zip — they live in the GitHub
+# repo. prepare_loco.py needs the five per-subset files (train = 2,3,5;
+# val = 1,4). Downloaded into datasets/raw/loco/annotations/.
+ANNOT_BASE = "https://raw.githubusercontent.com/tum-fml/loco/main/rgb"
+ANNOT_FILES = (
+    "loco-sub1-v1-val",
+    "loco-sub2-v1-train",
+    "loco-sub3-v1-train",
+    "loco-sub4-v1-val",
+    "loco-sub5-v1-train",
+)
+
 CHUNK = 1 << 20  # 1 MiB
 
 
@@ -137,6 +149,22 @@ def main(argv: list[str] | None = None) -> int:
     logger.info("Extracting %s ...", ZIP_PATH.name)
     n = _extract(ZIP_PATH, LOCO_DIR)
     logger.info("Extracted %d members into %s", n, LOCO_DIR.relative_to(REPO))
+
+    # Annotations (separate from the image zip) — required by prepare_loco.py.
+    annot_dir = LOCO_DIR / "annotations"
+    annot_dir.mkdir(exist_ok=True)
+    for stem in ANNOT_FILES:
+        dest = annot_dir / f"{stem}.json"
+        if dest.is_file() and not args.force:
+            logger.info("  %s already present — skipping.", dest.name)
+            continue
+        logger.info("Fetching annotations %s ...", stem)
+        try:
+            _download(f"{ANNOT_BASE}/{stem}.json", dest)
+        except OSError as exc:
+            logger.error("Annotation download failed for %s: %s", stem, exc)
+            return 3
+
     _write_manifest(n)
 
     if not args.keep_zip:
