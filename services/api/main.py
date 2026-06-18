@@ -90,22 +90,25 @@ def health() -> dict:
 def list_models() -> dict:
     try:
         client = _mlflow_client()
-        models = client.search_registered_models()
+        # search_registered_models() returns [] on some MLflow backends even
+        # when models exist; search_model_versions() is reliable. Group by name.
+        all_versions = client.search_model_versions()
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=503, detail=f"mlflow unreachable: {exc}") from exc
-    out = []
-    for m in models:
-        versions = []
-        for v in m.latest_versions or []:
-            versions.append(
-                {
-                    "version": v.version,
-                    "stage": v.current_stage,
-                    "run_id": v.run_id,
-                    "creation_timestamp": v.creation_timestamp,
-                }
-            )
-        out.append({"name": m.name, "versions": versions})
+    by_model: dict[str, list] = {}
+    for v in all_versions:
+        by_model.setdefault(v.name, []).append(
+            {
+                "version": v.version,
+                "stage": v.current_stage,
+                "run_id": v.run_id,
+                "creation_timestamp": v.creation_timestamp,
+            }
+        )
+    out = [
+        {"name": name, "versions": sorted(vs, key=lambda x: int(x["version"]), reverse=True)}
+        for name, vs in sorted(by_model.items())
+    ]
     return {"models": out}
 
 

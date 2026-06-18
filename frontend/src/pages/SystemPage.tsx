@@ -71,8 +71,8 @@ export function SystemPage() {
                     <td className="px-4 py-2 font-mono text-xs">{r.run_id.slice(0, 8)}</td>
                     <td className="px-4 py-2 text-xs">{r.experiment}</td>
                     <td className="px-4 py-2 text-xs">{r.status}</td>
-                    <td className="px-4 py-2 font-mono text-xs tabular-nums">{r.metrics?.val_map50?.toFixed(3) ?? '—'}</td>
-                    <td className="px-4 py-2 font-mono text-xs tabular-nums">{r.metrics?.val_map50_95?.toFixed(3) ?? '—'}</td>
+                    <td className="px-4 py-2 font-mono text-xs tabular-nums">{(r.metrics?.test_mAP50 ?? r.metrics?.mAP50 ?? r.metrics?.val_map50)?.toFixed(3) ?? '—'}</td>
+                    <td className="px-4 py-2 font-mono text-xs tabular-nums">{(r.metrics?.test_mAP50_95 ?? r.metrics?.mAP50_95 ?? r.metrics?.val_map50_95)?.toFixed(3) ?? '—'}</td>
                   </tr>
                 ))}
               </tbody>
