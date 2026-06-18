@@ -26,16 +26,16 @@ interface KpiCardProps {
 
 function KpiCard({ icon, label, value, unit, trend, status = 'normal', subtitle }: KpiCardProps) {
   const statusDot = {
-    normal: 'bg-emerald',
-    warning: 'bg-amber',
-    critical: 'bg-coral',
+    normal: 'bg-emerald glow-emerald',
+    warning: 'bg-amber glow-amber',
+    critical: 'bg-coral glow-coral',
   }
 
   const trendColor = trend?.direction === 'up' ? 'text-emerald' : 'text-coral'
   const trendIcon = trend?.direction === 'up' ? <TrendingUpIcon className="h-3 w-3" /> : <TrendingDownIcon className="h-3 w-3" />
 
   return (
-    <div className="bg-card border border-border rounded-xl px-4 py-3.5 shadow-soft hover:shadow-md transition-all duration-200">
+    <div className="bg-card border border-border rounded-xl px-4 py-3.5 interactive-card">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 mb-1.5">

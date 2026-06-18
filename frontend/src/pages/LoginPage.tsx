@@ -119,8 +119,13 @@ export function LoginPage() {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-900">
-      <div className="absolute inset-0 opacity-10">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-950">
+      {/* Floating ambient glow blobs */}
+      <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-electric/15 rounded-full blur-[100px] animate-blob" />
+      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal/10 rounded-full blur-[100px] animate-blob animation-delay-2000" />
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-500/10 rounded-full blur-[120px] animate-blob animation-delay-4000" />
+
+      <div className="absolute inset-0 opacity-15">
         <svg className="w-full h-full" preserveAspectRatio="none">
           <defs>
             <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">

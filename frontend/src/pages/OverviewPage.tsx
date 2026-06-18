@@ -31,8 +31,7 @@ export function OverviewPage() {
         {/* Right: Live Alerts & Predictions (1 column) */}
         <div className="xl:col-span-2 space-y-4">
           {/* Live Alerts Panel */}
-          {/* Live Alerts Panel */}
-          <div className="bg-card rounded-xl p-4 border border-border">
+          <div className="bg-card rounded-xl p-4 border border-border interactive-card">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-foreground">
                 <AlertCircle className="h-4 w-4 text-coral" />
@@ -89,7 +88,7 @@ export function OverviewPage() {
           </div>
 
           {/* Predictions Panel */}
-          <div className="bg-card rounded-xl p-4 border border-border">
+          <div className="bg-card rounded-xl p-4 border border-border interactive-card">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-foreground">
                 <TrendingUp className="h-4 w-4 text-electric" />
@@ -106,8 +105,10 @@ export function OverviewPage() {
                   </div>
                   <span className="text-xs font-bold text-coral">91%</span>
                 </div>
-                <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-full w-[91%] bg-gradient-to-r from-coral to-amber rounded-full" />
+                <div className="h-2 bg-secondary rounded-full overflow-hidden relative">
+                  <div className="h-full w-[91%] bg-gradient-to-r from-coral to-amber rounded-full relative overflow-hidden">
+                    <div className="absolute inset-0 progress-shimmer" />
+                  </div>
                 </div>
               </div>
               {/* Prediction 2 */}
@@ -119,8 +120,10 @@ export function OverviewPage() {
                   </div>
                   <span className="text-xs font-bold text-teal">55%</span>
                 </div>
-                <div className="h-2 bg-secondary rounded-full overflow-hidden">
-                  <div className="h-full w-[55%] bg-gradient-to-r from-teal to-emerald rounded-full" />
+                <div className="h-2 bg-secondary rounded-full overflow-hidden relative">
+                  <div className="h-full w-[55%] bg-gradient-to-r from-teal to-emerald rounded-full relative overflow-hidden">
+                    <div className="absolute inset-0 progress-shimmer" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -138,7 +141,7 @@ export function OverviewPage() {
         </div>
 
         {/* Activity Timeline */}
-        <div className="lg:col-span-1 glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
+        <div className="lg:col-span-1 glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl interactive-card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold flex items-center gap-2">
               <Activity className="h-4 w-4 text-electric" />
@@ -175,7 +178,7 @@ export function OverviewPage() {
         </div>
 
         {/* Heatmap */}
-        <div className="lg:col-span-1 glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
+        <div className="lg:col-span-1 glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl interactive-card">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold">Heatmap - Forklift Activity</h3>
           </div>
