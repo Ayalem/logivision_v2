@@ -80,7 +80,10 @@ export function DigitalTwin() {
   }, [selectedZone, setSelectedZone])
 
   return (
-    <div className="relative w-full h-[520px] rounded-2xl overflow-hidden ring-1 ring-border bg-[#0B1120]">
+    <div className="relative w-full h-[520px] rounded-2xl overflow-hidden ring-1 ring-border bg-[#0B1120] interactive-card">
+      {/* Animated Lidar scanning line */}
+      <div className="laser-scanline" />
+
       {hasGL ? (
         <Canvas
           shadows

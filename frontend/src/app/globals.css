@@ -242,3 +242,45 @@
   box-shadow: 0 0 25px rgba(59, 130, 246, 0.5);
   transform: scale(1.05) rotate(5deg);
 }
+
+/* Page routing transitions */
+@keyframes page-enter {
+  0% { opacity: 0; transform: translateY(12px); filter: blur(2px); }
+  100% { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.page-transition {
+  animation: page-enter 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Lidar scanline animation */
+@keyframes scanline {
+  0% { top: 0%; opacity: 0; }
+  10% { opacity: 0.6; }
+  90% { opacity: 0.6; }
+  100% { top: 100%; opacity: 0; }
+}
+.laser-scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    rgba(37, 99, 235, 0.3) 50%,
+    transparent
+  );
+  height: 4px;
+  box-shadow: 0 0 8px 1px rgba(37, 99, 235, 0.4);
+  animation: scanline 4s linear infinite;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Search Bar Glow */
+.search-glow {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.search-glow:focus-within {
+  border-color: hsla(var(--primary) / 0.5) !important;
+  box-shadow: 0 0 12px 1px rgba(37, 99, 235, 0.1) !important;
+}

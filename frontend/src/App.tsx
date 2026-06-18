@@ -98,7 +98,9 @@ export function App() {
         <main className="flex-1 min-w-0 flex flex-col">
           <Header />
           <div className="flex-1 overflow-auto px-6 py-5 dot-grid bg-background/50">
-            <PageRouter />
+            <div key={view} className="page-transition">
+              <PageRouter />
+            </div>
           </div>
         </main>
       </div>

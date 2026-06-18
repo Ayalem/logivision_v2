@@ -145,7 +145,7 @@ export function Header() {
 
         {/* Center: Search pill */}
         <div className="flex-1 max-w-lg relative" ref={searchContainerRef}>
-          <div className="flex items-center bg-secondary/60 hover:bg-secondary border border-border/40 rounded-full px-4 py-2 w-full transition-all">
+          <div className="flex items-center bg-secondary/60 hover:bg-secondary border border-border/40 rounded-full px-4 py-2 w-full transition-all search-glow">
             <Search className="h-4 w-4 text-muted-foreground shrink-0 mr-2" />
             <input
               ref={searchInputRef}
