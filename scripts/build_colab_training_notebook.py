@@ -1,8 +1,8 @@
 """Generate ml/notebooks/00_colab_training.ipynb — a standalone notebook
-that fine-tunes YOLOv8 on the Kaggle warehouse-delivery-box dataset
-inside Google Colab with a T4 GPU. Detects Colab, sets up env, pulls
-dataset via kagglehub, trains 50 epochs at 640 px, packages best.pt
-+ results.csv for download.
+that fine-tunes YOLOv8s on the LOCO real-warehouse dataset inside Google
+Colab with a T4 GPU. Detects Colab, sets up env, fetches + converts LOCO,
+trains 120 epochs at 640 px with imbalance-targeting augmentation, packages
+best.pt + results.csv for download.
 
 Run: uv run python scripts/build_colab_training_notebook.py
 """
@@ -35,7 +35,7 @@ md(
     """# LOGIVISION — Train YOLOv8 on Google Colab (T4)
 
 **Purpose.** Fine-tune YOLOv8n on the **LOCO** real-warehouse dataset
-using a free Colab T4 GPU. 50 epochs at 640 px takes **~25 minutes on
+using a free Colab T4 GPU. 120 epochs of yolov8s takes **~60-90 min on
 T4**, vs hours on an M3 CPU.
 
 ## Before you run
@@ -57,7 +57,7 @@ pallet, stillage, pallet_truck`.
 | 3 | (no-op — LOCO needs no credentials) | <1 s |
 | 4 | Download LOCO (~769 MB, CC0) | 1-3 min |
 | 5 | Convert COCO → YOLO, scene-separated split (`scripts/prepare_loco.py`) | 20 s |
-| 6 | Train YOLOv8n: 50 epochs, imgsz=640, batch=32, AdamW, cos_lr | **~25 min** |
+| 6 | Train YOLOv8s: 120 epochs + copy-paste aug (imbalance) | **~60-90 min** |
 | 7 | Validate on the held-out test split (subset 4 — unseen warehouse) | 30 s |
 | 8 | Plot training curves | 5 s |
 | 9 | Download `best.pt` + `results.csv` to your machine | 5 s |
@@ -186,14 +186,13 @@ print(DATA_YAML.read_text())
 
 # Cell 6 - train
 code(
-    """# 6. Train. ~25 min on T4.
-#    Hyperparameters chosen for the soutenance demo:
-#      - 50 epochs (good convergence on 2,820 LOCO train images)
-#      - imgsz=640 (production size; not the 320 demo size)
-#      - batch=32 (T4 has 16 GB - safe headroom; bump to 48 if you want)
-#      - cos_lr=True (anneals smoothly; matches ULMFiT recipe)
-#      - patience=15 (early stop if val mAP plateaus)
-#      - device=0 (GPU 0)
+    """# 6. Train. ~60-90 min on T4 (yolov8s, 120 epochs).
+#    Config targets LOCO's class imbalance (pallet = 78% of instances; the
+#    first yolov8n/50ep run scored mAP@0.5=0.22 overall but 0.55 on pallet):
+#      - yolov8s (more capacity than n for a 5-class long-tailed problem)
+#      - 120 epochs (rare classes need more passes), patience=30
+#      - copy_paste=0.3 + mosaic/mixup (boost rare-class recall — key lever)
+#      - imgsz=640, batch=24 (yolov8s fits a T4 at 24), cos_lr, device=0
 
 # Defensive: if cells 1-5 weren't run in order, recover DATA_YAML from disk.
 # This lets you re-run cell 6 alone after a restart, as long as cell 5 ran
@@ -212,23 +211,37 @@ except NameError:
 
 from ultralytics import YOLO
 
-model = YOLO('yolov8n.pt')                  # COCO weights as starting point
+# yolov8s (not n): more capacity for a long-tailed 5-class problem.
+model = YOLO('yolov8s.pt')                  # COCO weights as starting point
 results = model.train(
     data=str(DATA_YAML),
-    epochs=50,
+    epochs=120,                             # was 50 — the rare classes need more passes
     imgsz=640,
-    batch=32,
+    batch=24,                               # yolov8s is heavier; lower batch fits a T4
     optimizer='AdamW',
     lr0=0.001,
     cos_lr=True,
-    patience=15,
+    patience=30,
     device=0,
     project='runs',
-    name='colab_loco_50ep',
+    name='colab_loco_s_120ep',
     exist_ok=True,
     verbose=False,
     plots=True,
     seed=42,
+    # ── Imbalance-targeting augmentation ──────────────────────────────────
+    # LOCO is long-tailed (pallet = 78% of instances; forklift = 474).
+    # copy_paste pastes instances of under-represented classes into other
+    # images — the single most effective lever for rare-class recall. Mosaic
+    # + mixup + geometric/HSV jitter further diversify the rare-class views.
+    copy_paste=0.3,
+    mosaic=1.0,
+    mixup=0.15,
+    degrees=5.0,
+    scale=0.5,
+    fliplr=0.5,
+    hsv_h=0.015, hsv_s=0.7, hsv_v=0.4,
+    close_mosaic=10,                        # disable mosaic for the last 10 epochs (cleaner convergence)
 )
 print('training done')
 """
@@ -257,7 +270,7 @@ code(
 import pandas as pd
 import matplotlib.pyplot as plt
 
-candidates = sorted(pathlib.Path('runs').glob('**/colab_loco_50ep'))
+candidates = sorted(pathlib.Path('runs').glob('**/colab_loco_s_120ep'))
 run_dir = next((p for p in candidates if (p / 'results.csv').is_file()), None)
 if run_dir is None:
     run_dir = next((p for p in candidates if (p / 'weights' / 'best.pt').is_file()), None)
@@ -315,7 +328,7 @@ code(
 import shutil
 from datetime import datetime
 
-candidates = sorted(pathlib.Path('runs').glob('**/colab_loco_50ep'))
+candidates = sorted(pathlib.Path('runs').glob('**/colab_loco_s_120ep'))
 run_dir = next((p for p in candidates if (p / 'results.csv').is_file()), None)
 if run_dir is None:
     run_dir = next((p for p in candidates if (p / 'weights' / 'best.pt').is_file()), None)
