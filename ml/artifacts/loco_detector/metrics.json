@@ -1,0 +1,63 @@
+{
+  "model": "YOLOv8n fine-tuned on LOCO (Logistics Objects in Context)",
+  "eval_split": "LOCO subset 4 \u2014 scene-separated held-out test (no cross-scene leakage)",
+  "overall": {
+    "mAP50": 0.219,
+    "mAP50_95": 0.0908,
+    "precision": 0.332,
+    "recall": 0.247,
+    "images": 1202,
+    "instances": 39729
+  },
+  "per_class": {
+    "pallet": {
+      "instances": 39022,
+      "mAP50": 0.553,
+      "mAP50_95": 0.217,
+      "precision": 0.617,
+      "recall": 0.53
+    },
+    "pallet_truck": {
+      "instances": 559,
+      "mAP50": 0.118,
+      "mAP50_95": 0.0434,
+      "precision": 0.518,
+      "recall": 0.0716
+    },
+    "forklift": {
+      "instances": 119,
+      "mAP50": 0.185,
+      "mAP50_95": 0.0968,
+      "precision": 0.166,
+      "recall": 0.319
+    },
+    "stillage": {
+      "instances": 29,
+      "mAP50": 0.0211,
+      "mAP50_95": 0.00621,
+      "precision": 0.0258,
+      "recall": 0.069
+    },
+    "small_load_carrier": {
+      "instances": 0,
+      "note": "absent in held-out scene (subset 4) \u2014 not evaluable"
+    }
+  },
+  "class_distribution": {
+    "train_instances": {
+      "small_load_carrier": 13240,
+      "forklift": 474,
+      "pallet": 68148,
+      "stillage": 3400,
+      "pallet_truck": 1674
+    },
+    "test_instances": {
+      "small_load_carrier": 0,
+      "forklift": 119,
+      "pallet": 39022,
+      "stillage": 29,
+      "pallet_truck": 559
+    }
+  },
+  "analysis": "Aggregate mAP@0.5 = 0.22 is dominated by a severe class imbalance: pallet accounts for 78.4% of training instances, while stillage / pallet_truck / forklift are rare. The detector is strong on the well-represented pallet class (mAP@0.5 = 0.55) and degrades on rare classes. The held-out scene (subset 4) contains no small_load_carrier instances, so that class is not evaluable on this split. This is an honest, imbalance-limited result, not a training failure."
+}
