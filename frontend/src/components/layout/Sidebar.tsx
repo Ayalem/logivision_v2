@@ -33,19 +33,17 @@ interface NavItem {
   workerOnly?: boolean
 }
 
+// Only data-backed views are shown. The Inventory / Workforce / Tasks /
+// Activity-Log / Analytics pages from the redesign carried hardcoded demo
+// content, which has no place in a research-grade dashboard — hidden until
+// wired to real data.
 const NAV: NavItem[] = [
   { labelKey: "overview", view: 'overview',  icon: LayoutDashboard },
   { labelKey: 'digitalTwin', view: 'zones',     icon: Grid3x3, adminOnly: true },
   { labelKey: 'cameras', view: 'cameras',   icon: Video },
-  { labelKey: 'analytics', view: 'analytics',   icon: BarChart3, adminOnly: true },
   { labelKey: 'alerts', view: 'anomalies', icon: AlertTriangle },
-  { labelKey: 'inventory', view: 'inventory',   icon: Package },
-  { labelKey: 'workforce', view: 'workforce',   icon: Users },
-  { labelKey: 'myTasks', view: 'tasks', icon: CheckSquare },
-  { labelKey: 'activityLog', view: 'activity-log', icon: History, adminOnly: true },
   { labelKey: 'mlMonitoring', view: 'ml-monitoring', icon: ChartDots3, adminOnly: true },
   { labelKey: 'system', view: 'system',    icon: ServerCog, adminOnly: true },
-  { labelKey: 'settings', view: 'settings', icon: Settings },
 ]
 
 export function Sidebar() {

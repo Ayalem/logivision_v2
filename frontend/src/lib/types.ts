@@ -77,6 +77,7 @@ export interface Kpis {
   totalCameras: number
   avgProcessingTime: number
   stockLevel: number
+  pipelineActive: boolean
   degraded: boolean
 }
 
