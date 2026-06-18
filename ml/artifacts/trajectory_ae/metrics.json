@@ -1,49 +1,19 @@
 {
-  "n_windows": {
-    "train": 380,
-    "val": 81,
-    "test": 82
+  "trained_on": "TOMIE ground-truth trajectories (Zenodo 7849183)",
+  "n_windows": 7837,
+  "split": {
+    "train": 5485,
+    "val": 1176,
+    "test": 1176
   },
-  "best_val_mse": 0.1330285668373108,
-  "thresholds": {
-    "warning": 0.4376353859901442,
-    "critical": 0.6326182007789585
-  },
+  "val_recon_error_mean": 0.39441120624542236,
+  "test_recon_error_mean": 0.3210904896259308,
+  "threshold_warning_p99": 4.6196184158325195,
+  "threshold_critical_p99_5": 4.8795318603515625,
   "threshold_sweep": {
-    "p95.0": {
-      "threshold": 0.15844354033470154,
-      "test_flag_rate": 0.15853658536585366
-    },
-    "p97.0": {
-      "threshold": 0.251010960340499,
-      "test_flag_rate": 0.0
-    },
-    "p99.0": {
-      "threshold": 0.4376353859901442,
-      "test_flag_rate": 0.0
-    },
-    "p99.5": {
-      "threshold": 0.6326182007789585,
-      "test_flag_rate": 0.0
-    },
-    "p99.9": {
-      "threshold": 0.7886044526100237,
-      "test_flag_rate": 0.0
-    }
-  },
-  "perturbation_sanity": {
-    "speed_x3": {
-      "median_score": 0.17705854773521423,
-      "flagged_frac": 0.0
-    },
-    "direction_reversal": {
-      "median_score": 0.17781630158424377,
-      "flagged_frac": 0.0
-    },
-    "aspect_flip_drop": {
-      "median_score": 0.7938148379325867,
-      "flagged_frac": 1.0
-    }
-  },
-  "dataset": "TalTech warehouse clips \u2014 YOLO+ByteTrack trajectories (see data/processed/trajectories/manifest.json)"
+    "p95": 2.062394142150879,
+    "p99": 4.6196184158325195,
+    "p99.5": 4.8795318603515625,
+    "p99.9": 7.954751968383789
+  }
 }
