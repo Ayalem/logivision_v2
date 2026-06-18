@@ -83,7 +83,7 @@ export function TasksPage() {
         </div>
         <button 
           onClick={() => setShowNewTaskForm(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-electric text-white text-sm font-semibold hover:bg-electric/90 transition-all shadow-lg shadow-electric/20"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-electric text-white text-xs font-bold hover:bg-electric/90 transition-all shadow-lg shadow-electric/20"
         >
           <Plus className="h-4 w-4" />
           New Task
@@ -92,47 +92,47 @@ export function TasksPage() {
 
       {/* New Task Modal */}
       {showNewTaskForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="glass-card rounded-2xl p-6 border border-white/10 shadow-2xl max-w-md w-full mx-4 space-y-4">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold">Create New Task</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="glass-card rounded-2xl p-6 border border-border/80 shadow-2xl max-w-md w-full mx-4 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border/40">
+              <h2 className="text-sm font-black uppercase tracking-wider">Create New Task</h2>
               <button 
                 onClick={() => setShowNewTaskForm(false)}
-                className="p-1 rounded-lg hover:bg-white/5 text-muted-foreground"
+                className="p-1 rounded-lg hover:bg-secondary text-muted-foreground transition-colors"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Task Title</label>
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Task Title</label>
                 <input 
                   type="text" 
                   value={newTask.title}
                   onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                  placeholder="Enter task title"
-                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-electric/50"
+                  placeholder="Restock Shelf A-42..."
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-secondary border border-border/50 text-sm text-foreground focus:outline-none focus:border-electric/50 search-glow"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Zone</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Zone</label>
                 <input 
                   type="text" 
                   value={newTask.zone}
                   onChange={(e) => setNewTask({...newTask, zone: e.target.value})}
                   placeholder="e.g., Zone A-1"
-                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-electric/50"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-secondary border border-border/50 text-sm text-foreground focus:outline-none focus:border-electric/50 search-glow"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Priority</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Priority</label>
                 <select 
                   value={newTask.priority}
                   onChange={(e) => setNewTask({...newTask, priority: e.target.value as Priority})}
-                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-electric/50"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-secondary border border-border/50 text-sm text-foreground focus:outline-none focus:border-electric/50 search-glow"
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
@@ -140,29 +140,29 @@ export function TasksPage() {
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Due Time</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">Due Time</label>
                 <input 
                   type="text" 
                   value={newTask.dueTime}
                   onChange={(e) => setNewTask({...newTask, dueTime: e.target.value})}
                   placeholder="e.g., 10:30 AM"
-                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-electric/50"
+                  className="w-full px-3.5 py-2.5 rounded-lg bg-secondary border border-border/50 text-sm text-foreground focus:outline-none focus:border-electric/50 search-glow"
                 />
               </div>
             </div>
 
-            <div className="flex gap-3 pt-4">
+            <div className="flex gap-3 pt-4 border-t border-border/40">
               <button 
                 onClick={() => setShowNewTaskForm(false)}
-                className="flex-1 px-4 py-2 rounded-lg border border-white/10 text-white text-sm font-semibold hover:bg-white/5 transition-all"
+                className="flex-1 px-4 py-2.5 rounded-lg border border-border text-foreground text-xs font-bold hover:bg-secondary transition-all"
               >
                 Cancel
               </button>
               <button 
                 onClick={handleAddTask}
                 disabled={!newTask.title || !newTask.zone || !newTask.dueTime}
-                className="flex-1 px-4 py-2 rounded-lg bg-electric text-white text-sm font-semibold hover:bg-electric/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2.5 rounded-lg bg-electric text-white text-xs font-bold hover:bg-electric/90 shadow-lg shadow-electric/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Create Task
               </button>
@@ -173,20 +173,20 @@ export function TasksPage() {
 
       <div className="flex-1 flex gap-6 overflow-x-auto pb-4">
         {columns.map(col => (
-          <div key={col} className="flex-1 min-w-[300px] flex flex-col bg-card/20 border border-border/30 rounded-xl">
-            <div className="p-4 border-b border-border/30 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold">{col}</h3>
-                <span className="px-2 py-0.5 rounded-full bg-foreground/5 text-[10px] font-bold text-muted-foreground">
+          <div key={col} className="flex-1 min-w-[320px] flex flex-col bg-secondary/30 border border-border/60 rounded-2xl">
+            <div className="p-4 border-b border-border/50 flex items-center justify-between bg-foreground/[0.01]">
+              <div className="flex items-center gap-2.5">
+                <h3 className="text-xs font-black uppercase tracking-wider text-foreground">{col}</h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-secondary text-[10px] font-bold text-muted-foreground border border-border/50">
                   {tasks.filter(t => t.column === col).length}
                 </span>
               </div>
-              <button className="p-1 rounded-md hover:bg-foreground/5 text-muted-foreground">
+              <button className="p-1 rounded-lg hover:bg-foreground/5 text-muted-foreground transition-colors">
                 <MoreHorizontal className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="flex-1 p-3 space-y-3 overflow-y-auto">
+            <div className="flex-1 p-3.5 space-y-3.5 overflow-y-auto">
               {tasks.filter(t => t.column === col).map(task => (
                 <div 
                   key={task.id}
@@ -197,28 +197,30 @@ export function TasksPage() {
                     const id = e.dataTransfer.getData('taskId')
                     moveTask(id, col)
                   }}
-                  className="group bg-card border border-border/50 rounded-lg p-4 shadow-sm hover:border-electric/50 transition-all cursor-grab active:cursor-grabbing"
+                  className="group bg-card border border-border/60 rounded-xl p-4 shadow-soft interactive-card transition-all cursor-grab active:cursor-grabbing hover:border-electric/30"
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <div className={cn("h-2 w-2 rounded-full", getPriorityColor(task.priority))} />
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        {task.priority} Priority
-                      </span>
-                    </div>
-                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
+                  <div className="flex items-start justify-between mb-3.5">
+                    <span className={cn(
+                      "status-badge",
+                      task.priority === 'High' ? "status-badge-critical" :
+                      task.priority === 'Medium' ? "status-badge-warning" :
+                      "status-badge-success"
+                    )}>
+                      {task.priority}
+                    </span>
+                    <GripVertical className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground/80 transition-colors" />
                   </div>
                   
-                  <h4 className="text-sm font-semibold mb-3">{task.title}</h4>
+                  <h4 className="text-sm font-black text-foreground mb-3">{task.title}</h4>
                   
-                  <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin className="h-3 w-3" />
-                      {task.zone}
+                  <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground border-t border-border/40 pt-2.5">
+                    <div className="flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5 text-electric/70" />
+                      <span>{task.zone}</span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="h-3 w-3" />
-                      {task.dueTime}
+                    <div className="flex items-center gap-1 bg-secondary px-2 py-0.5 rounded border border-border/40">
+                      <Clock className="h-3 w-3 text-electric/70" />
+                      <span className="font-mono">{task.dueTime}</span>
                     </div>
                   </div>
                 </div>
@@ -231,9 +233,9 @@ export function TasksPage() {
                   const id = e.dataTransfer.getData('taskId')
                   moveTask(id, col)
                 }}
-                className="h-20 border-2 border-dashed border-border/20 rounded-lg flex items-center justify-center text-muted-foreground/20"
+                className="h-16 border-2 border-dashed border-border/30 hover:border-electric/30 hover:bg-electric/[0.02] rounded-xl flex items-center justify-center text-muted-foreground/30 hover:text-electric transition-all"
               >
-                <Plus className="h-6 w-6" />
+                <Plus className="h-5 w-5" />
               </div>
             </div>
           </div>

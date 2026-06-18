@@ -284,3 +284,79 @@
   border-color: hsla(var(--primary) / 0.5) !important;
   box-shadow: 0 0 12px 1px rgba(37, 99, 235, 0.1) !important;
 }
+
+/* Modern Tables */
+.modern-table-container {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border) / 0.8);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02);
+}
+.modern-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.75rem;
+}
+.modern-table th {
+  background: rgba(0, 0, 0, 0.02);
+  padding: 10px 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+  color: hsl(var(--muted-foreground));
+  border-bottom: 1px solid hsl(var(--border) / 0.8);
+}
+.dark .modern-table th {
+  background: rgba(255, 255, 255, 0.02);
+}
+.modern-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  color: hsl(var(--foreground));
+}
+.modern-table tr:last-child td {
+  border-bottom: none;
+}
+.modern-table tr {
+  transition: background-color 0.2s ease;
+}
+.modern-table tr:hover td {
+  background-color: hsl(var(--foreground) / 0.015);
+}
+
+/* Modern Badges */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 1.5px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+.status-badge-critical {
+  background-color: rgba(244, 63, 94, 0.1);
+  color: rgb(244, 63, 94);
+  border-color: rgba(244, 63, 94, 0.2);
+}
+.status-badge-warning {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: rgb(245, 158, 11);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+.status-badge-success {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: rgb(16, 185, 129);
+  border-color: rgba(16, 185, 129, 0.2);
+}
+.status-badge-info {
+  background-color: rgba(37, 99, 235, 0.1);
+  color: rgb(37, 99, 235);
+  border-color: rgba(37, 99, 235, 0.2);
+}

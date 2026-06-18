@@ -194,10 +194,6 @@ export function Header() {
 
         {/* Right: Actions, Lang, Notifications, and Profile */}
         <div className="flex items-center gap-3">
-          {/* Submit Work button */}
-          <button className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-electric to-electric/90 text-white text-xs font-bold rounded-full shadow-lg shadow-electric/15 hover:shadow-electric/25 transition-all">
-            <span>Submit Work</span>
-          </button>
 
           {/* Live indicator pill */}
           <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-electric/10 border border-electric/20 text-electric text-xs font-bold">
