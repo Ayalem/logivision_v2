@@ -1,0 +1,74 @@
+# infra/mediamtx/mediamtx.yml
+# MediaMTX 1.9.x — Relay RTSP pour LOGIVISION
+#
+# Rôle : recevoir les flux des caméras (smartphones, IP cams) et les
+# redistribuer en RTSP vers le Frame Grabber.
+#
+# Le Frame Grabber se connecte ensuite avec :
+#   python -m services.frame_grabber.grabber \
+#       --source rtsp://localhost:8554/<path> \
+#       --camera-id <id> --fps 2
+#
+# Démarré via : make kafka-up (inclus dans docker-compose.kafka.yml)
+
+###############################################################################
+# Logging
+###############################################################################
+logLevel: info
+logDestinations: [stdout]
+
+###############################################################################
+# Ports
+###############################################################################
+rtspAddress:   :8554   # RTSP — utilisé par le Frame Grabber (--source rtsp://...)
+rtmpAddress:   :1935   # RTMP — pour OBS / smartphones Android
+hlsAddress:    :8888   # HLS  — pour lecture dans un navigateur
+webrtcAddress: :8889   # WebRTC — pour lecture dans un navigateur sans plugin
+apiAddress:    :9997   # API admin REST
+
+###############################################################################
+# API admin (utile pour vérifier qu'un flux est actif)
+# GET http://localhost:9997/v3/paths/list
+###############################################################################
+api: yes
+
+###############################################################################
+# Chemins (paths) — un path = une caméra
+# Le Frame Grabber consomme : rtsp://mediamtx:8554/<path_name>
+###############################################################################
+paths:
+
+  # ── Caméra 1 : entrée entrepôt ───────────────────────────────────────────
+  # Frame Grabber : --source rtsp://localhost:8554/cam_entree_01 --camera-id CAM01
+  cam_entree_01:
+    source: publisher   # une caméra / OBS publie sur ce path
+
+  # ── Caméra 2 : zone stockage A ───────────────────────────────────────────
+  # Frame Grabber : --source rtsp://localhost:8554/cam_zone_a --camera-id CAM02
+  cam_zone_a:
+    source: publisher
+
+  # ── Caméra 3 : zone expédition ───────────────────────────────────────────
+  # Frame Grabber : --source rtsp://localhost:8554/cam_expedition --camera-id CAM03
+  cam_expedition:
+    source: publisher
+
+  # ── Caméra 4 : quai de chargement ────────────────────────────────────────
+  # Frame Grabber : --source rtsp://localhost:8554/cam_quai --camera-id CAM04
+  cam_quai:
+    source: publisher
+
+  # ── Path de test local ───────────────────────────────────────────────────
+  # Publier depuis FFmpeg :
+  #   ffmpeg -re -stream_loop -1 -i datasets/raw/videos/Camera1.mp4 \
+  #          -c copy -f rtsp rtsp://localhost:8554/test
+  # Consommer avec le grabber :
+  #   make frame-grabber SOURCE=rtsp://localhost:8554/test CAMERA=CAM_TEST FPS=2
+  test:
+    source: publisher
+
+  # ── Fallback : accepte n'importe quel path non défini ci-dessus ──────────
+  "~^.*$":
+    source: publisher
+
+    source: publisher
