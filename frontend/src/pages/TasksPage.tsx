@@ -5,7 +5,8 @@ import {
   Clock, 
   MapPin, 
   AlertCircle,
-  GripVertical
+  GripVertical,
+  X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n'
@@ -36,6 +37,8 @@ export function TasksPage() {
     const saved = localStorage.getItem('logivision_tasks')
     return saved ? JSON.parse(saved) : INITIAL_TASKS
   })
+  const [showNewTaskForm, setShowNewTaskForm] = useState(false)
+  const [newTask, setNewTask] = useState({ title: '', zone: '', priority: 'Medium' as Priority, dueTime: '' })
 
   useEffect(() => {
     localStorage.setItem('logivision_tasks', JSON.stringify(tasks))
@@ -55,6 +58,22 @@ export function TasksPage() {
     }
   }
 
+  const handleAddTask = () => {
+    if (newTask.title && newTask.zone && newTask.dueTime) {
+      const task: Task = {
+        id: `${Date.now()}`,
+        title: newTask.title,
+        zone: newTask.zone,
+        priority: newTask.priority,
+        dueTime: newTask.dueTime,
+        column: 'To Do'
+      }
+      setTasks([...tasks, task])
+      setNewTask({ title: '', zone: '', priority: 'Medium', dueTime: '' })
+      setShowNewTaskForm(false)
+    }
+  }
+
   return (
     <div className="h-full flex flex-col space-y-6 animate-in fade-in duration-500">
       <div className="flex items-center justify-between">
@@ -62,11 +81,95 @@ export function TasksPage() {
           <h1 className="text-2xl font-bold tracking-tight">{t('myTasks')}</h1>
           <p className="text-sm text-muted-foreground">Manage your daily warehouse assignments</p>
         </div>
-        <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-electric text-white text-sm font-semibold hover:bg-electric/90 transition-all shadow-lg shadow-electric/20">
+        <button 
+          onClick={() => setShowNewTaskForm(true)}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-electric text-white text-sm font-semibold hover:bg-electric/90 transition-all shadow-lg shadow-electric/20"
+        >
           <Plus className="h-4 w-4" />
           New Task
         </button>
       </div>
+
+      {/* New Task Modal */}
+      {showNewTaskForm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="glass-card rounded-2xl p-6 border border-white/10 shadow-2xl max-w-md w-full mx-4 space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold">Create New Task</h2>
+              <button 
+                onClick={() => setShowNewTaskForm(false)}
+                className="p-1 rounded-lg hover:bg-white/5 text-muted-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Task Title</label>
+                <input 
+                  type="text" 
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({...newTask, title: e.target.value})}
+                  placeholder="Enter task title"
+                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-electric/50"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Zone</label>
+                <input 
+                  type="text" 
+                  value={newTask.zone}
+                  onChange={(e) => setNewTask({...newTask, zone: e.target.value})}
+                  placeholder="e.g., Zone A-1"
+                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-electric/50"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Priority</label>
+                <select 
+                  value={newTask.priority}
+                  onChange={(e) => setNewTask({...newTask, priority: e.target.value as Priority})}
+                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-electric/50"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Due Time</label>
+                <input 
+                  type="text" 
+                  value={newTask.dueTime}
+                  onChange={(e) => setNewTask({...newTask, dueTime: e.target.value})}
+                  placeholder="e.g., 10:30 AM"
+                  className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-electric/50"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button 
+                onClick={() => setShowNewTaskForm(false)}
+                className="flex-1 px-4 py-2 rounded-lg border border-white/10 text-white text-sm font-semibold hover:bg-white/5 transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleAddTask}
+                disabled={!newTask.title || !newTask.zone || !newTask.dueTime}
+                className="flex-1 px-4 py-2 rounded-lg bg-electric text-white text-sm font-semibold hover:bg-electric/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Create Task
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 flex gap-6 overflow-x-auto pb-4">
         {columns.map(col => (

@@ -31,84 +31,97 @@ export function OverviewPage() {
         {/* Right: Live Alerts & Predictions (1 column) */}
         <div className="xl:col-span-2 space-y-4">
           {/* Live Alerts Panel */}
-          <div className="glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
+          {/* Live Alerts Panel */}
+          <div className="bg-card rounded-xl p-4 border border-border">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-foreground">
                 <AlertCircle className="h-4 w-4 text-coral" />
                 {t('liveAlerts')}
               </h3>
-              <span className="text-xs text-muted-foreground">View all</span>
+              <span className="text-xs font-semibold text-electric cursor-pointer hover:underline">View all</span>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-2">
               {/* Alert Item 1 */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-coral/10 border border-coral/30">
-                <div className="h-2 w-2 rounded-full bg-coral mt-1.5 flex-shrink-0" />
+              <div className="flex items-start gap-3 p-3 rounded-lg border border-border border-l-4 border-l-coral bg-coral/5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-coral">POTENTIAL COLLIDER</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Forklift #07 & #14</p>
-                  <p className="text-xs text-muted-foreground">Aisle B - 16:32:10</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-coral">POTENTIAL COLLIDER</span>
+                    <span className="text-[9px] font-semibold text-muted-foreground">16:32:10</span>
+                  </div>
+                  <p className="text-xs font-semibold text-foreground mt-1">Forklift #07 & #14</p>
+                  <p className="text-[10px] text-muted-foreground">Aisle B</p>
                 </div>
               </div>
               {/* Alert Item 2 */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-amber/10 border border-amber/30">
-                <div className="h-2 w-2 rounded-full bg-amber mt-1.5 flex-shrink-0" />
+              <div className="flex items-start gap-3 p-3 rounded-lg border border-border border-l-4 border-l-amber bg-amber/5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-amber">UNAUTHORIZED AREA</p>
-                  <p className="text-xs text-muted-foreground">Worker #1 detected</p>
-                  <p className="text-xs text-muted-foreground">Zone D - Restricted Area - 16:13:48</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber">UNAUTHORIZED AREA</span>
+                    <span className="text-[9px] font-semibold text-muted-foreground">16:13:48</span>
+                  </div>
+                  <p className="text-xs font-semibold text-foreground mt-1">Worker #1 detected</p>
+                  <p className="text-[10px] text-muted-foreground">Zone D - Restricted Area</p>
                 </div>
               </div>
               {/* Alert Item 3 */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-amber/10 border border-amber/30">
-                <div className="h-2 w-2 rounded-full bg-amber mt-1.5 flex-shrink-0" />
+              <div className="flex items-start gap-3 p-3 rounded-lg border border-border border-l-4 border-l-amber bg-amber/5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-amber">SPEED VIOLATION</p>
-                  <p className="text-xs text-muted-foreground">Forklift #03</p>
-                  <p className="text-xs text-muted-foreground">Speed: 8.2 km/h - 16:13:42</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber">SPEED VIOLATION</span>
+                    <span className="text-[9px] font-semibold text-muted-foreground">16:13:42</span>
+                  </div>
+                  <p className="text-xs font-semibold text-foreground mt-1">Forklift #03</p>
+                  <p className="text-[10px] text-muted-foreground">Speed: 8.2 km/h</p>
                 </div>
               </div>
               {/* Alert Item 4 */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-teal/10 border border-teal/30">
-                <div className="h-2 w-2 rounded-full bg-teal mt-1.5 flex-shrink-0" />
+              <div className="flex items-start gap-3 p-3 rounded-lg border border-border border-l-4 border-l-teal bg-teal/5">
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-teal">PALLET LEFT IN AISLE</p>
-                  <p className="text-xs text-muted-foreground">Aisle C - Block C3</p>
-                  <p className="text-xs text-muted-foreground">16:13:21</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal">PALLET LEFT IN AISLE</span>
+                    <span className="text-[9px] font-semibold text-muted-foreground">16:13:21</span>
+                  </div>
+                  <p className="text-xs font-semibold text-foreground mt-1">Pallet obstruction</p>
+                  <p className="text-[10px] text-muted-foreground">Aisle C - Block C3</p>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Predictions Panel */}
-          <div className="glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
+          <div className="bg-card rounded-xl p-4 border border-border">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 text-foreground">
                 <TrendingUp className="h-4 w-4 text-electric" />
                 Predictions
               </h3>
             </div>
-            <div className="space-y-3">
+            <div className="space-y-4">
               {/* Prediction 1 */}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-coral">Congestion</span>
+                  <div>
+                    <span className="text-xs font-semibold text-foreground">Congestion Risk</span>
+                    <span className="text-[10px] text-muted-foreground block">Aisle C</span>
+                  </div>
                   <span className="text-xs font-bold text-coral">91%</span>
                 </div>
-                <div className="h-1 bg-card rounded-full overflow-hidden">
+                <div className="h-2 bg-secondary rounded-full overflow-hidden">
                   <div className="h-full w-[91%] bg-gradient-to-r from-coral to-amber rounded-full" />
                 </div>
-                <p className="text-xs text-muted-foreground">Aisle C</p>
               </div>
               {/* Prediction 2 */}
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-emerald">Inventory Depletion</span>
-                  <span className="text-xs font-bold text-emerald">55%</span>
+                  <div>
+                    <span className="text-xs font-semibold text-foreground">Inventory Depletion</span>
+                    <span className="text-[10px] text-muted-foreground block">Item #1042 - Zone B - 2h 42m</span>
+                  </div>
+                  <span className="text-xs font-bold text-teal">55%</span>
                 </div>
-                <div className="h-1 bg-card rounded-full overflow-hidden">
-                  <div className="h-full w-[55%] bg-gradient-to-r from-emerald to-teal rounded-full" />
+                <div className="h-2 bg-secondary rounded-full overflow-hidden">
+                  <div className="h-full w-[55%] bg-gradient-to-r from-teal to-emerald rounded-full" />
                 </div>
-                <p className="text-xs text-muted-foreground">Item #1042 - Zone B - 2h 42m</p>
               </div>
             </div>
           </div>

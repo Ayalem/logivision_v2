@@ -12,7 +12,14 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     pg_user = os.environ.get("POSTGRES_USER", "postgres")
     pg_pass = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    pg_host = os.environ.get("POSTGRES_HOST", "localhost")
+    # Try 'postgres' as host first if in docker, then fallback to 'localhost'
+    pg_host = os.environ.get("POSTGRES_HOST")
+    if not pg_host:
+        # Check if we are running in a container
+        if os.path.exists('/.dockerenv'):
+            pg_host = "postgres"
+        else:
+            pg_host = "localhost"
     pg_port = os.environ.get("POSTGRES_PORT", "5432")
     pg_db = os.environ.get("POSTGRES_DB", "logivision")
     DATABASE_URL = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
@@ -27,6 +34,7 @@ class Worker(Base):
     id = Column(String, primary_key=True, index=True)
     name = Column(String, index=True)
     email = Column(String, unique=True, index=True)
+    phone = Column(String)
     role = Column(String)
     zone = Column(String)
     status = Column(String, default="active")

@@ -14,7 +14,7 @@ export function StatusBar() {
   const sys = data?.systemStatus ?? 'offline'
 
   return (
-    <footer className="h-8 shrink-0 bg-card/50 border-t border-border/30 flex items-center justify-between px-4 text-[10px] text-muted-foreground backdrop-blur-md">
+    <footer className="h-8 shrink-0 bg-card border-t border-border flex items-center justify-between px-4 text-[10px] text-muted-foreground">
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-1.5">
           <div className={cn(

@@ -25,38 +25,36 @@ interface KpiCardProps {
 }
 
 function KpiCard({ icon, label, value, unit, trend, status = 'normal', subtitle }: KpiCardProps) {
-  const statusColor = {
-    normal: 'from-emerald/10 to-teal/5 border-emerald/30',
-    warning: 'from-amber/10 to-orange/5 border-amber/30',
-    critical: 'from-coral/10 to-red/5 border-coral/30',
+  const statusDot = {
+    normal: 'bg-emerald',
+    warning: 'bg-amber',
+    critical: 'bg-coral',
   }
 
   const trendColor = trend?.direction === 'up' ? 'text-emerald' : 'text-coral'
-  const trendIcon = trend?.direction === 'up' ? <TrendingUpIcon className="h-3.5 w-3.5" /> : <TrendingDownIcon className="h-3.5 w-3.5" />
+  const trendIcon = trend?.direction === 'up' ? <TrendingUpIcon className="h-3 w-3" /> : <TrendingDownIcon className="h-3 w-3" />
 
   return (
-    <div className={cn(
-      'glass-card px-4 py-4 rounded-xl border backdrop-blur-xl transition-all duration-200 hover:shadow-lg',
-      statusColor[status],
-    )}>
+    <div className="bg-card border border-border rounded-xl px-4 py-3.5 shadow-soft hover:shadow-md transition-all duration-200">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <div className={cn('h-1.5 w-1.5 rounded-full shrink-0', statusDot[status])} />
             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
             {trend && (
-              <div className={cn('flex items-center gap-0.5 text-[10px] font-bold', trendColor)}>
+              <div className={cn('flex items-center gap-0.5 text-[9px] font-bold', trendColor)}>
                 {trendIcon}
                 <span>{trend.value}%</span>
               </div>
             )}
           </div>
-          <div className="flex items-baseline gap-1">
-            <span className="text-2xl font-bold text-foreground">{value}</span>
-            {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
+          <div className="flex items-baseline gap-0.5">
+            <span className="text-xl font-black tracking-tight text-foreground">{value}</span>
+            {unit && <span className="text-[10px] font-bold text-muted-foreground">{unit}</span>}
           </div>
-          {subtitle && <p className="text-[10px] text-muted-foreground mt-1">{subtitle}</p>}
+          {subtitle && <p className="text-[9px] text-muted-foreground mt-0.5">{subtitle}</p>}
         </div>
-        <div className="flex-shrink-0 text-muted-foreground">
+        <div className="flex-shrink-0 text-muted-foreground bg-secondary/80 p-1.5 rounded-lg">
           {icon}
         </div>
       </div>

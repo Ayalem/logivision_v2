@@ -11,18 +11,29 @@ const MAX_BACKOFF_MS = 15_000
 export function useEventStream(enabled = true) {
   const pushLiveEvent = useAppStore((s) => s.pushLiveEvent)
   const setWsState    = useAppStore((s) => s.setWsState)
+  const isAuthenticated = useAppStore((s) => s.isAuthenticated)
   const wsRef         = useRef<WebSocket | null>(null)
   const backoffRef    = useRef<number>(1000)
   const closedByUser  = useRef<boolean>(false)
 
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || !isAuthenticated) return
     closedByUser.current = false
 
     function connect() {
       const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-      const url = `${proto}://${window.location.host}/ws/events`
-      const ws  = new WebSocket(url)
+      const host = window.location.host || 'localhost:8000'
+      const url = `${proto}://${host}/ws/events`
+      
+      let ws: WebSocket
+      try {
+        ws = new WebSocket(url)
+      } catch (e) {
+        console.error('WebSocket connection failed:', e)
+        setWsState('error')
+        return
+      }
+      
       wsRef.current = ws
 
       ws.onopen = () => {

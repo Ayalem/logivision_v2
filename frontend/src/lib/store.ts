@@ -24,6 +24,15 @@ interface AppState {
   isAuthenticated: boolean
   userRole: 'admin' | 'worker' | null
   authToken: string | null
+  user: {
+    id?: string
+    name?: string
+    email?: string
+    phone?: string
+    role?: string
+    zone?: string
+    status?: string
+  } | null
 
   // Navigation / chrome
   currentView: ViewType
@@ -52,8 +61,9 @@ interface AppState {
   }
 
   // Setters
-  login: (token: string, role: 'admin' | 'worker') => void
+  login: (token: string, role: 'admin' | 'worker', user?: any) => void
   logout: () => void
+  setUser: (user: any) => void
   setView: (v: ViewType) => void
   toggleSidebar: () => void
   toggleFocusMode: () => void
@@ -79,6 +89,7 @@ export const useAppStore = create<AppState>((set) => ({
   isAuthenticated: false,
   userRole: null,
   authToken: null,
+  user: null,
 
   // Land on the Caméras view by default — the operator's primary
   // concern is what each camera sees. The Overview/3D twin lives one
@@ -100,18 +111,19 @@ export const useAppStore = create<AppState>((set) => ({
 
   live: { events: [], lastEventTs: null, wsState: 'idle' },
 
-  login: (token, role) => {
-    set({ isAuthenticated: true, authToken: token, userRole: role })
+  login: (token, role, user) => {
+    set({ isAuthenticated: true, authToken: token, userRole: role, user: user || null })
     if (typeof window !== 'undefined') {
-      localStorage.setItem('logivision_auth', JSON.stringify({ token, role }))
+      localStorage.setItem('logivision_auth', JSON.stringify({ token, role, user }))
     }
   },
   logout: () => {
-    set({ isAuthenticated: false, authToken: null, userRole: null })
+    set({ isAuthenticated: false, authToken: null, userRole: null, user: null })
     if (typeof window !== 'undefined') {
       localStorage.removeItem('logivision_auth')
     }
   },
+  setUser: (user) => set({ user }),
   setView:                (v) => set({ currentView: v }),
   toggleSidebar:          () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   toggleFocusMode:        () => set((s) => ({ focusMode: !s.focusMode })),
@@ -139,8 +151,8 @@ if (typeof window !== 'undefined') {
   const stored = localStorage.getItem('logivision_auth')
   if (stored) {
     try {
-      const { token, role } = JSON.parse(stored)
-      useAppStore.setState({ isAuthenticated: true, authToken: token, userRole: role })
+      const { token, role, user } = JSON.parse(stored)
+      useAppStore.setState({ isAuthenticated: true, authToken: token, userRole: role, user: user || null })
     } catch (e) {
       console.error('Failed to restore auth state:', e)
     }

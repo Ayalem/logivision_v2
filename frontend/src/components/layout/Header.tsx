@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Bell, RefreshCw, Search, Globe, Check, AlertCircle, AlertTriangle, Info, X, Command, User, Settings as SettingsIcon, LogOut } from 'lucide-react'
+import { Bell, RefreshCw, Search, Globe, Check, AlertCircle, AlertTriangle, Info, X, Command, User, Settings as SettingsIcon, LogOut, Warehouse } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAppStore, type ViewType } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -39,7 +39,10 @@ export function Header() {
   const events = useAppStore((s) => s.live.events)
   const qc = useQueryClient()
   const userRole = useAppStore((s) => s.userRole)
+  const user = useAppStore((s) => s.user)
   const role = userRole ?? 'worker'
+  const userName = user?.name ?? (role === 'admin' ? 'Administrator' : 'Operator')
+  const userEmail = user?.email ?? 'operator@logivision.ai'
   
   const [now, setNow] = useState(new Date())
   const [langOpen, setLangOpen] = useState(false)
@@ -129,117 +132,90 @@ export function Header() {
   const logout = useAppStore((s) => s.logout)
 
   return (
-    <header className="sticky top-0 z-20 glass border-b border-border/50">
-      <div className="px-6 py-4 flex items-center justify-between gap-4">
-        {/* Left: Warehouse selector and date/time */}
+    <header className="sticky top-0 z-20 bg-card border-b border-border">
+      <div className="px-6 py-3.5 flex items-center justify-between gap-4">
+        {/* Left: Select/Instance ID */}
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-3 py-2 rounded-lg bg-card/40 hover:bg-card/60 transition-colors text-sm font-medium">
-              <span>{t('warehouse')}</span>
-              <span className="text-xs text-muted-foreground">Alpha-01</span>
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors text-xs font-semibold">
+              <span>Alpha-01</span>
             </button>
-          </div>
-          <div className="hidden lg:flex items-center gap-4 text-xs text-muted-foreground font-mono">
-            <div>
-              <span className="text-muted-foreground">{t('date')}</span>
-              <div className="text-foreground font-semibold">{dateStr}</div>
-            </div>
-            <div>
-              <span className="text-muted-foreground">{t('time')}</span>
-              <div className="text-foreground font-semibold">{timeStr}</div>
-            </div>
           </div>
         </div>
 
-        {/* Right: System status, search, and controls */}
-        <div className="flex items-center gap-3">
-          {/* System Status */}
-          <div className="hidden md:flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald/10 border border-emerald/30">
-            <div className="h-2 w-2 rounded-full bg-emerald animate-pulse" />
-            <span className="text-xs font-semibold text-emerald">{t('systemStatus')}</span>
+        {/* Center: Search pill */}
+        <div className="flex-1 max-w-lg relative" ref={searchContainerRef}>
+          <div className="flex items-center bg-secondary/60 hover:bg-secondary border border-border/40 rounded-full px-4 py-2 w-full transition-all">
+            <Search className="h-4 w-4 text-muted-foreground shrink-0 mr-2" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search for customer orders, jobs, vehicles and assets..."
+              className="bg-transparent border-none outline-none text-xs w-full text-foreground placeholder-muted-foreground"
+              onFocus={() => setSearchExpanded(true)}
+            />
+            <div className="flex items-center gap-1 shrink-0 ml-1">
+              <kbd className="hidden sm:inline-flex h-4 items-center gap-0.5 rounded border border-border/50 bg-background px-1.5 font-mono text-[9px] text-muted-foreground">
+                <span>⌘</span>K
+              </kbd>
+            </div>
           </div>
 
-          {/* Search Functional */}
-          <div ref={searchContainerRef} className="relative flex items-center">
-            <div className={cn(
-              "flex items-center bg-card/40 border border-border/50 rounded-lg transition-all duration-300 overflow-hidden",
-              searchExpanded ? "w-[280px] px-3" : "w-10 px-0 justify-center border-transparent hover:bg-card/60"
-            )}>
-              <Search 
-                className={cn("h-4 w-4 text-muted-foreground cursor-pointer shrink-0", !searchExpanded && "hover:text-foreground")} 
-                onClick={() => {
-                  setSearchExpanded(true)
-                  setTimeout(() => searchInputRef.current?.focus(), 100)
-                }}
-              />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={t('searchPlaceholder')}
-                className={cn(
-                  "bg-transparent border-none outline-none text-xs ml-2 w-full transition-opacity duration-200",
-                  searchExpanded ? "opacity-100" : "opacity-0 pointer-events-none"
-                )}
-              />
-              {searchExpanded && (
-                <div className="flex items-center gap-1 shrink-0 ml-1">
-                  <kbd className="hidden sm:inline-flex h-4 items-center gap-1 rounded border border-border/50 bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-                    <span className="text-xs">⌘</span>K
-                  </kbd>
-                  <X 
-                    className="h-3 w-3 text-muted-foreground cursor-pointer hover:text-foreground" 
-                    onClick={() => {
-                      setSearchExpanded(false)
-                      setSearchQuery('')
-                    }}
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Search Results Dropdown */}
-            {searchExpanded && searchResults.length > 0 && (
-              <div className="absolute top-full right-0 mt-2 w-[320px] bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
-                <div className="max-h-[400px] overflow-y-auto p-2">
-                  {Object.entries(groupedResults).map(([category, items]: [string, any]) => (
-                    <div key={category} className="mb-2 last:mb-0">
-                      <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                        {category}
-                      </div>
-                      {items.map((item: any) => (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            setSearchExpanded(false)
-                            setSearchQuery('')
-                            // Navigation logic would go here
-                          }}
-                          className="w-full flex flex-col gap-0.5 px-3 py-2 rounded-lg hover:bg-foreground/5 transition-colors text-left"
-                        >
-                          <span className="text-xs font-medium">{item.name}</span>
-                          <span className="text-[10px] text-muted-foreground">{item.id} • {item.zone}</span>
-                        </button>
-                      ))}
+          {/* Search Results Dropdown */}
+          {searchExpanded && searchResults.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+              <div className="max-h-[300px] overflow-y-auto p-2">
+                {Object.entries(groupedResults).map(([category, items]: [string, any]) => (
+                  <div key={category} className="mb-2 last:mb-0">
+                    <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                      {category}
                     </div>
-                  ))}
-                </div>
+                    {items.map((item: any) => (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setSearchExpanded(false)
+                          setSearchQuery('')
+                        }}
+                        className="w-full flex flex-col gap-0.5 px-3 py-1.5 rounded-lg hover:bg-foreground/5 transition-colors text-left"
+                      >
+                        <span className="text-xs font-medium">{item.name}</span>
+                        <span className="text-[10px] text-muted-foreground">{item.id} • {item.zone}</span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
+          )}
+        </div>
+
+        {/* Right: Actions, Lang, Notifications, and Profile */}
+        <div className="flex items-center gap-3">
+          {/* Submit Work button */}
+          <button className="hidden sm:flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-electric to-electric/90 text-white text-xs font-bold rounded-full shadow-lg shadow-electric/15 hover:shadow-electric/25 transition-all">
+            <span>Submit Work</span>
+          </button>
+
+          {/* Live indicator pill */}
+          <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-electric/10 border border-electric/20 text-electric text-xs font-bold">
+            <span className="h-1.5 w-1.5 rounded-full bg-electric animate-pulse" />
+            <span>Live</span>
           </div>
 
           {/* Language Selector */}
           <div className="relative">
             <button 
               onClick={() => setLangOpen(!langOpen)}
-              className="p-2 rounded-lg hover:bg-card/60 transition-colors text-muted-foreground hover:text-foreground"
+              className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
             >
               <Globe className="h-4 w-4" />
             </button>
             {langOpen && (
               <div className={cn(
-                "absolute mt-2 w-40 bg-card border border-border/50 rounded-lg shadow-lg overflow-hidden z-50",
+                "absolute mt-2 w-40 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-50",
                 lang === 'ar' ? "left-0" : "right-0"
               )}>
                 <ul className="py-1">
@@ -269,7 +245,7 @@ export function Header() {
           <button 
             type="button"
             onClick={handleRefresh}
-            className="p-2 rounded-lg hover:bg-card/60 transition-colors text-muted-foreground hover:text-foreground"
+            className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
           >
             <RefreshCw className={cn("h-4 w-4", refreshing && "animate-spin")} />
           </button>
@@ -279,7 +255,7 @@ export function Header() {
             <button 
               type="button"
               onClick={() => setNotificationsOpen(!notificationsOpen)}
-              className="relative p-2 rounded-lg hover:bg-card/60 transition-colors text-muted-foreground hover:text-foreground"
+              className="relative p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
             >
               <Bell className="h-4 w-4" />
               {events.length > 0 && (
@@ -289,16 +265,16 @@ export function Header() {
 
             {notificationsOpen && (
               <div className={cn(
-                "absolute mt-2 w-80 bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2",
+                "absolute mt-2 w-80 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2",
                 lang === 'ar' ? "left-0" : "right-0"
               )}>
-                <div className="p-4 border-b border-border/30 flex items-center justify-between bg-foreground/[0.02]">
+                <div className="p-4 border-b border-border flex items-center justify-between bg-foreground/[0.02]">
                   <h3 className="text-xs font-bold uppercase tracking-wider">{t('notifications')}</h3>
                   <button className="text-[10px] text-electric font-bold hover:underline">{t('markAllAsRead')}</button>
                 </div>
                 <div className="max-h-[350px] overflow-y-auto">
                   {events.length > 0 ? (
-                    <div className="divide-y divide-border/30">
+                    <div className="divide-y divide-border">
                       {events.slice(0, 10).map((event, i) => (
                         <div key={i} className="p-4 hover:bg-foreground/[0.02] transition-colors cursor-pointer group">
                           <div className="flex gap-3">
@@ -309,7 +285,7 @@ export function Header() {
                             )} />
                             <div className="space-y-1">
                               <p className="text-xs font-medium leading-tight group-hover:text-electric transition-colors">
-                                {event.event_type.replace(/_/g, ' ')} in {event.zone}
+                                {event.event_type.replace(/_/g, ' ')} {event.payload?.zone ? `in ${event.payload.zone}` : ''}
                               </p>
                               <p className="text-[10px] text-muted-foreground">
                                 {new Date(event.timestamp_ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -328,7 +304,7 @@ export function Header() {
                     </div>
                   )}
                 </div>
-                <div className="p-3 border-t border-border/30 text-center bg-foreground/[0.01]">
+                <div className="p-3 border-t border-border text-center bg-foreground/[0.01]">
                   <button 
                     onClick={() => { setView('anomalies'); setNotificationsOpen(false); }}
                     className="text-[10px] font-bold text-muted-foreground hover:text-foreground transition-colors"
@@ -340,25 +316,29 @@ export function Header() {
             )}
           </div>
 
-          {/* User Profile Menu */}
-          <div className="relative ml-2 border-l border-border/30 pl-3">
+          {/* User Profile Menu with Avatar & Name */}
+          <div className="relative pl-3 border-l border-border flex items-center gap-2">
             <button 
               onClick={() => setUserMenuOpen(!userMenuOpen)}
-              className="flex items-center gap-2 p-1 rounded-full hover:bg-card/60 transition-colors border border-transparent hover:border-border/50"
+              className="flex items-center gap-2.5 text-left p-1 rounded-full hover:bg-secondary transition-colors"
             >
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-electric/20 to-teal/20 flex items-center justify-center text-electric border border-electric/30">
-                <User className="h-4 w-4" />
+              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-electric/20 to-teal/20 flex items-center justify-center text-electric text-xs font-bold border border-electric/30">
+                {userName.charAt(0).toUpperCase()}
+              </div>
+              <div className="hidden md:block pr-1">
+                <p className="text-xs font-bold leading-none text-foreground">{userName}</p>
+                <p className="text-[9px] font-semibold text-muted-foreground mt-1 capitalize leading-none">{role}</p>
               </div>
             </button>
             
             {userMenuOpen && (
               <div className={cn(
-                "absolute mt-2 w-56 bg-card border border-border/50 rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2",
+                "absolute top-full right-0 mt-2 w-56 bg-card border border-border rounded-xl shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2",
                 lang === 'ar' ? "left-0" : "right-0"
               )}>
-                <div className="p-3 border-b border-border/30 bg-foreground/[0.02]">
-                  <p className="text-xs font-bold">{role === 'admin' ? 'Administrator' : 'Operator'}</p>
-                  <p className="text-[10px] text-muted-foreground truncate">operator@logivision.ai</p>
+                <div className="p-3 border-b border-border bg-foreground/[0.02]">
+                  <p className="text-xs font-bold">{userName}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{userEmail}</p>
                 </div>
                 <div className="p-1.5">
                   <button 
@@ -376,7 +356,7 @@ export function Header() {
                     <span>{t('accountSettings')}</span>
                   </button>
                 </div>
-                <div className="p-1.5 border-t border-border/30">
+                <div className="p-1.5 border-t border-border">
                   <button 
                     onClick={() => logout()}
                     className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-coral hover:bg-coral/10 transition-colors"

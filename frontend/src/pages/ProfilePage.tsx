@@ -1,30 +1,134 @@
-import { useState } from 'react'
-import { User, Mail, Phone, Calendar, Shield, Edit2, Check, X } from 'lucide-react'
-import { useMe } from '@/lib/api'
+import { useState, useEffect } from 'react'
+import { User, Mail, Phone, Calendar, Shield, Edit2, Check, X, AlertCircle, Loader2 } from 'lucide-react'
 import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 export function ProfilePage() {
-  const me = useMe()
-  const role = me.data?.role ?? 'operator'
-  const userName = me.data?.name ?? 'Operator'
+  const user = useAppStore((s) => s.user)
+  const authToken = useAppStore((s) => s.authToken)
+  const setUser = useAppStore((s) => s.setUser)
   
   const [isEditing, setIsEditing] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  
   const [formData, setFormData] = useState({
-    name: userName,
-    email: 'operator@logivision.ai',
-    phone: '+33 1 23 45 67 89',
-    role: role,
-    joined: 'Jan 12, 2024'
+    name: user?.name ?? 'Operator',
+    email: user?.email ?? 'operator@logivision.ai',
+    phone: user?.phone ?? '+33 1 23 45 67 89',
+    zone: user?.zone ?? 'General'
   })
 
-  const handleSave = () => {
+  // Update form data when user changes
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name ?? 'Operator',
+        email: user.email ?? 'operator@logivision.ai',
+        phone: user.phone ?? '+33 1 23 45 67 89',
+        zone: user.zone ?? 'General'
+      })
+    }
+  }, [user])
+
+  const handleSave = async () => {
+    if (!user?.id || !authToken) {
+      setError('User information not available')
+      return
+    }
+
+    setIsSaving(true)
+    setError(null)
+    setSuccessMessage(null)
+
+    try {
+      const response = await fetch(`/api/users/${user.id}/profile`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          zone: formData.zone
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || 'Failed to save profile')
+      }
+
+      const updatedUser = await response.json()
+      setUser(updatedUser)
+      setIsEditing(false)
+      setSuccessMessage('Profile updated successfully!')
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to save changes'
+      setError(errorMsg)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleCancel = () => {
     setIsEditing(false)
-    // In a real app, you'd call an API here
+    setError(null)
+    // Reset form to current user data
+    if (user) {
+      setFormData({
+        name: user.name ?? 'Operator',
+        email: user.email ?? 'operator@logivision.ai',
+        phone: user.phone ?? '+33 1 23 45 67 89',
+        zone: user.zone ?? 'General'
+      })
+    }
+  }
+
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="glass-card rounded-2xl p-8 shadow-soft flex items-center gap-4 border-l-4 border-coral">
+          <AlertCircle className="h-6 w-6 text-coral flex-shrink-0" />
+          <div>
+            <h3 className="font-bold text-coral">Could not load profile data</h3>
+            <p className="text-sm text-muted-foreground">Please log in again to view your profile.</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
+      {/* Error Banner */}
+      {error && (
+        <div className="glass-card rounded-2xl p-4 shadow-soft flex items-center gap-3 border-l-4 border-coral bg-coral/5">
+          <AlertCircle className="h-5 w-5 text-coral flex-shrink-0" />
+          <div>
+            <p className="text-sm font-semibold text-coral">{error}</p>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-coral hover:text-coral/80"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Success Banner */}
+      {successMessage && (
+        <div className="glass-card rounded-2xl p-4 shadow-soft flex items-center gap-3 border-l-4 border-emerald bg-emerald/5">
+          <Check className="h-5 w-5 text-emerald flex-shrink-0" />
+          <p className="text-sm font-semibold text-emerald">{successMessage}</p>
+        </div>
+      )}
+
       {/* Profile Header Card */}
       <div className="glass-card rounded-2xl overflow-hidden shadow-soft">
         <div className="h-32 bg-gradient-to-r from-electric/40 via-teal/40 to-indigo/40 relative">
@@ -41,21 +145,27 @@ export function ProfilePage() {
             <h2 className="text-2xl font-bold">{formData.name}</h2>
             <div className="flex items-center gap-2 mt-1">
               <span className="text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-electric/10 text-electric border border-electric/20">
-                {formData.role}
+                {user.role ?? 'operator'}
               </span>
-              <span className="text-xs text-muted-foreground">ID: LV-2024-0892</span>
+              <span className="text-xs text-muted-foreground">ID: {user.id}</span>
             </div>
           </div>
           <button 
             onClick={() => isEditing ? handleSave() : setIsEditing(true)}
+            disabled={isSaving}
             className={cn(
-              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all",
+              "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-50",
               isEditing 
                 ? "bg-emerald text-white hover:bg-emerald/90" 
                 : "bg-foreground/5 hover:bg-foreground/10 text-foreground border border-border/50"
             )}
           >
-            {isEditing ? (
+            {isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Saving...
+              </>
+            ) : isEditing ? (
               <>
                 <Check className="h-4 w-4" />
                 Sauvegarder
@@ -77,7 +187,7 @@ export function ProfilePage() {
             <div className="flex items-center justify-between border-b border-border/30 pb-4">
               <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Informations Personnelles</h3>
               {isEditing && (
-                <button onClick={() => setIsEditing(false)} className="text-xs text-muted-foreground hover:text-coral flex items-center gap-1">
+                <button onClick={handleCancel} className="text-xs text-muted-foreground hover:text-coral flex items-center gap-1">
                   <X className="h-3 w-3" /> Annuler
                 </button>
               )}
@@ -134,9 +244,18 @@ export function ProfilePage() {
 
               <div className="space-y-1.5">
                 <label className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold flex items-center gap-1.5">
-                  <Calendar className="h-3 w-3" /> Date d'inscription
+                  <Calendar className="h-3 w-3" /> Zone
                 </label>
-                <p className="text-sm font-medium">{formData.joined}</p>
+                {isEditing ? (
+                  <input 
+                    type="text" 
+                    value={formData.zone}
+                    onChange={(e) => setFormData({...formData, zone: e.target.value})}
+                    className="w-full bg-foreground/5 border border-border/50 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-electric"
+                  />
+                ) : (
+                  <p className="text-sm font-medium">{formData.zone}</p>
+                )}
               </div>
             </div>
           </div>

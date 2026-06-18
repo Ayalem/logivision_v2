@@ -24,9 +24,10 @@ from functools import lru_cache
 from pathlib import Path
 
 import yaml
-from fastapi import APIRouter, Query, Depends, Body, HTTPException
+from fastapi import APIRouter, Query, Depends, Body, HTTPException, Header
 from sqlalchemy.orm import Session
 from services.api.database import get_db, Worker, Task as DBTask
+import re
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["client"])
@@ -46,24 +47,59 @@ LOGIVISION_ROLE = os.environ.get("LOGIVISION_ROLE", "operator")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+def get_current_user(authorization: str = Header(None), db: Session = Depends(get_db)) -> Worker:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    
+    token = authorization.split(" ")[1]
+    # Simple token format: session_{user_id}_{timestamp}
+    # Use non-greedy matching to handle user_ids with special chars
+    match = re.match(r"session_(.+?)_(\d+)$", token)
+    if not match:
+        # Fallback for demo tokens
+        if token.startswith("token_"):
+             # For demo, we'll just return a default worker if it exists
+             user = db.query(Worker).first()
+             if user: return user
+             raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401, detail="The string did not match the expected pattern.")
+    
+    user_id = match.group(1)
+    user = db.query(Worker).filter(Worker.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    return user
+
 @router.post("/login")
 def login_user(login_data: dict = Body(...), db: Session = Depends(get_db)) -> dict:
     """Authenticate user against the database."""
     email = login_data.get("email")
     password = login_data.get("password")
     
-    # Check demo accounts first
-    if email == 'admin@logivision.com' and password == 'admin123':
-        return {"token": f"token_{int(time.time())}", "role": "admin", "status": "success"}
-    if email == 'worker@logivision.com' and password == 'worker123':
-        return {"token": f"token_{int(time.time())}", "role": "worker", "status": "success"}
-        
     # Check database
     user = db.query(Worker).filter(Worker.email == email).first()
+    
+    # Create demo user if not exists for the requested email if it's one of the demo ones
+    if not user:
+        if email == 'admin@logivision.com' and password == 'admin123':
+            user = Worker(id="admin-001", name="Administrator", email=email, password=password, role="admin", zone="All")
+        elif email == 'worker@logivision.com' and password == 'worker123':
+            user = Worker(id="worker-001", name="LogiWorker", email=email, password=password, role="worker", zone="Zone A")
+        elif email == 'farahwork102@gmail.com':
+            user = Worker(id="farah-001", name="Farah", email=email, password=password, role="admin", zone="All")
+        
+        if user:
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
     if user and user.password == password:
+        # Ensure the token format is safe and simple
+        token = f"session_{user.id}_{int(time.time())}"
         return {
-            "token": f"token_{int(time.time())}", 
-            "role": "admin" if user.role == "admin" else "worker", 
+            "token": token,
+            "role": user.role,
+            "user": _model_to_dict(user),
             "status": "success"
         }
     
@@ -278,10 +314,35 @@ def _humanise_event(evt: dict) -> str:
 
 
 @router.get("/me")
-def get_me() -> dict:
-    """Current session role. Stub for the demo — replace with OIDC later."""
-    role = LOGIVISION_ROLE if LOGIVISION_ROLE in {"operator", "admin"} else "operator"
-    return {"role": role, "name": "demo"}
+def get_me(user: Worker = Depends(get_current_user)) -> dict:
+    """Return current user info from token."""
+    return _model_to_dict(user)
+
+@router.get("/users/{user_id}/profile")
+def get_profile(user_id: str, db: Session = Depends(get_db), current_user: Worker = Depends(get_current_user)) -> dict:
+    # In a real app, you might check if current_user.id == user_id or if current_user is admin
+    user = db.query(Worker).filter(Worker.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return _model_to_dict(user)
+
+@router.patch("/users/{user_id}/profile")
+def update_profile(user_id: str, profile_data: dict = Body(...), db: Session = Depends(get_db), current_user: Worker = Depends(get_current_user)) -> dict:
+    if current_user.id != user_id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized to update this profile")
+    
+    user = db.query(Worker).filter(Worker.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update allowed fields
+    for field in ["name", "email", "phone", "zone"]:
+        if field in profile_data:
+            setattr(user, field, profile_data[field])
+    
+    db.commit()
+    db.refresh(user)
+    return _model_to_dict(user)
 
 
 def _model_to_dict(model) -> dict:

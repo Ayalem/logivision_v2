@@ -71,9 +71,9 @@ export function WorkforcePage() {
         title: taskTitle,
         zone: taskZone,
         priority: taskPriority,
-        dueTime: 'Today',
+        due_time: 'Today',
         column: 'To Do',
-        assignedTo: assigningTo
+        assigned_to: assigningTo
       })
       
       setShowSuccess(true)

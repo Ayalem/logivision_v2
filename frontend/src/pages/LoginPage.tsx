@@ -74,13 +74,22 @@ export function LoginPage() {
         body: JSON.stringify({ email, password })
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.detail || t('invalidCredentials'))
+      let data: any
+      const contentType = response.headers.get('content-type')
+      if (contentType && contentType.includes('application/json')) {
+        data = await response.json()
+      } else {
+        const text = await response.text()
+        throw new Error(text || `Error ${response.status}: Server returned non-JSON response`)
       }
 
-      const data = await response.json()
-      login(data.token, data.role)
+      if (!response.ok) {
+        throw new Error(data?.detail || t('invalidCredentials'))
+      }
+
+      // Use the role from data or fallback to the selected role
+      const userRole = data.role || role
+      login(data.token, userRole, data.user)
       // Navigate to the dashboard after successful login
       useAppStore.setState({ currentView: 'cameras' })
       
@@ -88,6 +97,23 @@ export function LoginPage() {
       setError(err instanceof Error ? err.message : t('loginFailed'))
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  // Fetch profile data after login
+  const fetchProfile = async (userId: string, token: string) => {
+    try {
+      const response = await fetch(`/api/users/${userId}/profile`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      if (response.ok) {
+        const profileData = await response.json()
+        useAppStore.setState({ user: profileData })
+      }
+    } catch (err) {
+      console.error('Failed to fetch profile:', err)
     }
   }
 
