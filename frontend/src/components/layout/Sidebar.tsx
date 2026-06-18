@@ -42,7 +42,9 @@ const NAV: NavItem[] = [
   { labelKey: 'digitalTwin', view: 'zones',     icon: Grid3x3, adminOnly: true },
   { labelKey: 'cameras', view: 'cameras',   icon: Video },
   { labelKey: 'alerts', view: 'anomalies', icon: AlertTriangle },
-  { labelKey: 'mlMonitoring', view: 'ml-monitoring', icon: ChartDots3, adminOnly: true },
+  // ml-monitoring hidden: its page used hardcoded mock models (Pose
+  // Estimation / Crowd Density / 98.2%). The System view shows the REAL
+  // MLflow registry + runs (useRegistry/useRuns).
   { labelKey: 'system', view: 'system',    icon: ServerCog, adminOnly: true },
 ]
 
