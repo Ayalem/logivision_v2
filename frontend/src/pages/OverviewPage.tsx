@@ -1,192 +1,104 @@
 /**
- * Operator hero page — comprehensive warehouse dashboard.
- * Layout: KPI strip → 3-column hero (Digital Twin + Alerts/Predictions) → Camera feed + Activity Timeline + Heatmap
+ * Operator overview — every panel is wired to REAL data (no fabricated
+ * alerts/timeline/heatmap). Layout: KPI strip → floor map → twin + congestion
+ * + live alerts → camera feed + recent-events timeline.
  */
-import { useCameras } from '@/lib/api'
+import { useCameras, useAnomalies } from '@/lib/api'
 import { AnalyticalCameraFeed } from '@/components/cameras/AnalyticalCameraFeed'
 import { KpiStrip } from '@/components/dashboard/KpiStrip'
 import { DigitalTwin } from '@/components/digital-twin/DigitalTwin'
 import { FloorMap } from '@/components/digital-twin/FloorMap'
 import { CongestionPanel } from '@/components/predictions/CongestionPanel'
-import { AlertCircle, TrendingUp, Activity } from 'lucide-react'
-import { useTranslation } from '@/lib/i18n'
+import { AlertCircle, Activity } from 'lucide-react'
+
+const sevDot: Record<string, string> = {
+  critical: 'bg-coral', warning: 'bg-amber', info: 'bg-teal',
+}
+const sevText: Record<string, string> = {
+  critical: 'text-coral', warning: 'text-amber', info: 'text-teal',
+}
+const fmtTime = (iso: string) => {
+  try { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }
+  catch { return '' }
+}
 
 export function OverviewPage() {
-  const { t } = useTranslation()
   const { data: cams } = useCameras()
   const cameras = cams?.cameras ?? []
+  const { data: anom } = useAnomalies(12)
+  const alerts = anom?.anomalies ?? []
 
   return (
     <div className="space-y-5">
-      {/* Top KPI Strip */}
       <KpiStrip />
 
-      {/* Top-down warehouse floor map + zone detail panel */}
+      {/* Top-down warehouse floor map + zone detail panel (real zone geometry) */}
       <FloorMap />
 
-      {/* Hero Section: 3-column layout */}
       <div className="grid grid-cols-1 xl:grid-cols-4 gap-4">
-        {/* Left: Digital Twin (2 columns) */}
+        {/* Left: 3D twin + congestion forecast (both real) */}
         <div className="xl:col-span-2 space-y-4">
           <DigitalTwin />
           <CongestionPanel />
         </div>
 
-        {/* Right: Live Alerts & Predictions (1 column) */}
-        <div className="xl:col-span-2 space-y-4">
-          {/* Live Alerts Panel */}
-          <div className="glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
+        {/* Right: live alerts from the real /api/anomalies stream */}
+        <div className="xl:col-span-2">
+          <div className="glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl h-full">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold flex items-center gap-2">
-                <AlertCircle className="h-4 w-4 text-coral" />
-                {t('liveAlerts')}
+                <AlertCircle className="h-4 w-4 text-coral" /> Alertes en direct
               </h3>
-              <span className="text-xs text-muted-foreground">View all</span>
+              <span className="text-xs text-muted-foreground">{alerts.length} récentes</span>
             </div>
-            <div className="space-y-3">
-              {/* Alert Item 1 */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-coral/10 border border-coral/30">
-                <div className="h-2 w-2 rounded-full bg-coral mt-1.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-coral">POTENTIAL COLLIDER</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Forklift #07 & #14</p>
-                  <p className="text-xs text-muted-foreground">Aisle B - 16:32:10</p>
-                </div>
+            {alerts.length === 0 ? (
+              <div className="h-40 flex items-center justify-center text-xs text-muted-foreground">
+                Aucune anomalie — démarrez le pipeline pour des alertes temps réel.
               </div>
-              {/* Alert Item 2 */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-amber/10 border border-amber/30">
-                <div className="h-2 w-2 rounded-full bg-amber mt-1.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-amber">UNAUTHORIZED AREA</p>
-                  <p className="text-xs text-muted-foreground">Worker #1 detected</p>
-                  <p className="text-xs text-muted-foreground">Zone D - Restricted Area - 16:13:48</p>
-                </div>
+            ) : (
+              <div className="space-y-2 max-h-[26rem] overflow-y-auto">
+                {alerts.slice(0, 10).map((a) => (
+                  <div key={a.id} className="flex items-start gap-3 p-2.5 rounded-lg bg-foreground/[0.03] border border-border/40">
+                    <div className={`h-2 w-2 rounded-full mt-1.5 flex-shrink-0 ${sevDot[a.severity] ?? 'bg-teal'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold ${sevText[a.severity] ?? 'text-foreground'}`}>
+                        {a.eventType.replace(/_/g, ' ')}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">{a.description}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {a.cameraId || a.zone || '—'} · {fmtTime(a.timestamp)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              {/* Alert Item 3 */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-amber/10 border border-amber/30">
-                <div className="h-2 w-2 rounded-full bg-amber mt-1.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-amber">SPEED VIOLATION</p>
-                  <p className="text-xs text-muted-foreground">Forklift #03</p>
-                  <p className="text-xs text-muted-foreground">Speed: 8.2 km/h - 16:13:42</p>
-                </div>
-              </div>
-              {/* Alert Item 4 */}
-              <div className="flex items-start gap-3 p-3 rounded-lg bg-teal/10 border border-teal/30">
-                <div className="h-2 w-2 rounded-full bg-teal mt-1.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-semibold text-teal">PALLET LEFT IN AISLE</p>
-                  <p className="text-xs text-muted-foreground">Aisle C - Block C3</p>
-                  <p className="text-xs text-muted-foreground">16:13:21</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Predictions Panel */}
-          <div className="glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-electric" />
-                Predictions
-              </h3>
-            </div>
-            <div className="space-y-3">
-              {/* Prediction 1 */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-coral">Congestion</span>
-                  <span className="text-xs font-bold text-coral">91%</span>
-                </div>
-                <div className="h-1 bg-card rounded-full overflow-hidden">
-                  <div className="h-full w-[91%] bg-gradient-to-r from-coral to-amber rounded-full" />
-                </div>
-                <p className="text-xs text-muted-foreground">Aisle C</p>
-              </div>
-              {/* Prediction 2 */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-emerald">Inventory Depletion</span>
-                  <span className="text-xs font-bold text-emerald">55%</span>
-                </div>
-                <div className="h-1 bg-card rounded-full overflow-hidden">
-                  <div className="h-full w-[55%] bg-gradient-to-r from-emerald to-teal rounded-full" />
-                </div>
-                <p className="text-xs text-muted-foreground">Item #1042 - Zone B - 2h 42m</p>
-              </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Bottom Section: Camera Feed + Activity Timeline + Heatmap */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Camera Feed */}
-        <div className="lg:col-span-1">
-          {cameras.length > 0 && (
-            <AnalyticalCameraFeed camera={cameras[0]} />
+      {/* Bottom: live camera feed + recent-events timeline (both real) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          {cameras.length > 0 && <AnalyticalCameraFeed camera={cameras[0]} />}
+        </div>
+        <div className="glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
+          <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+            <Activity className="h-4 w-4 text-electric" /> Journal des événements
+          </h3>
+          {alerts.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-6 text-center">En attente du pipeline…</p>
+          ) : (
+            <div className="space-y-1 text-xs max-h-72 overflow-y-auto">
+              {alerts.slice(0, 14).map((a) => (
+                <div key={a.id} className="flex items-center justify-between py-1.5 px-2 rounded hover:bg-foreground/5">
+                  <span className="text-muted-foreground font-mono">{fmtTime(a.timestamp)}</span>
+                  <span className="text-foreground font-medium truncate px-2 flex-1">{a.eventType.replace(/_/g, ' ')}</span>
+                  <span className={sevText[a.severity] ?? 'text-teal'}>●</span>
+                </div>
+              ))}
+            </div>
           )}
-        </div>
-
-        {/* Activity Timeline */}
-        <div className="lg:col-span-1 glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold flex items-center gap-2">
-              <Activity className="h-4 w-4 text-electric" />
-              Activity Timeline
-            </h3>
-          </div>
-          <div className="space-y-2 text-xs">
-            <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-foreground/5">
-              <span className="text-muted-foreground">14:10</span>
-              <span className="text-foreground font-medium">Forklift #01</span>
-              <span className="text-emerald">✓</span>
-            </div>
-            <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-foreground/5">
-              <span className="text-muted-foreground">14:15</span>
-              <span className="text-foreground font-medium">Aisle B</span>
-              <span className="text-emerald">✓</span>
-            </div>
-            <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-foreground/5">
-              <span className="text-muted-foreground">14:20</span>
-              <span className="text-foreground font-medium">Forklift #14</span>
-              <span className="text-emerald">✓</span>
-            </div>
-            <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-foreground/5">
-              <span className="text-muted-foreground">14:25</span>
-              <span className="text-foreground font-medium">Aisle A</span>
-              <span className="text-emerald">✓</span>
-            </div>
-            <div className="flex items-center justify-between py-2 px-2 rounded hover:bg-foreground/5">
-              <span className="text-muted-foreground">14:30</span>
-              <span className="text-foreground font-medium">Forklift #03</span>
-              <span className="text-coral">⚠</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Heatmap */}
-        <div className="lg:col-span-1 glass-card rounded-xl p-4 border border-border/50 backdrop-blur-xl">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold">Heatmap - Forklift Activity</h3>
-          </div>
-          <div className="w-full h-32 bg-gradient-to-br from-blue-900 via-purple-900 to-red-900 rounded-lg relative overflow-hidden">
-            <div className="absolute inset-0 opacity-60">
-              <div className="absolute top-1/4 left-1/3 w-12 h-12 bg-red-500 rounded-full blur-2xl" />
-              <div className="absolute top-1/2 right-1/4 w-16 h-16 bg-yellow-500 rounded-full blur-3xl" />
-              <div className="absolute bottom-1/4 left-1/4 w-10 h-10 bg-cyan-400 rounded-full blur-2xl" />
-            </div>
-          </div>
-          <div className="flex items-center justify-between mt-3 text-xs">
-            <span className="text-muted-foreground">Low</span>
-            <div className="flex gap-1">
-              <div className="h-2 w-2 rounded-full bg-blue-600" />
-              <div className="h-2 w-2 rounded-full bg-cyan-500" />
-              <div className="h-2 w-2 rounded-full bg-yellow-500" />
-              <div className="h-2 w-2 rounded-full bg-red-500" />
-            </div>
-            <span className="text-muted-foreground">High</span>
-          </div>
         </div>
       </div>
     </div>
