@@ -267,6 +267,7 @@ for i, name in val_results.names.items():
 # Cell 8 - plot curves
 code(
     """# 8. Plot the training curves so they're embedded in the notebook output.
+import pathlib
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -325,6 +326,7 @@ if map50 is not None:
 code(
     """# 9. Package best.pt + last.pt + results.csv + confusion matrix into a
 #    single zip and trigger a Colab download to your machine.
+import pathlib
 import shutil
 from datetime import datetime
 
