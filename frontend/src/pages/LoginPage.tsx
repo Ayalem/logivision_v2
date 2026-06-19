@@ -119,7 +119,7 @@ export function LoginPage() {
 
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-950">
+    <div className="dark min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-950 text-foreground">
       {/* Floating ambient glow blobs */}
       <div className="absolute top-1/4 left-1/4 w-80 h-80 bg-electric/15 rounded-full blur-[100px] animate-blob" />
       <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-teal/10 rounded-full blur-[100px] animate-blob animation-delay-2000" />
